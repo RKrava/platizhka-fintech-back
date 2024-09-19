@@ -21,12 +21,12 @@ const allowedIps = [
 
 // Инициализация Shopify API клиента
 const shopifyFutboss = shopifyApi({
-    apiSecretKey: process.env.SHOPIFY_API_SECRET,
-    hostName: process.env.SHOPIFY_HOST_NAME,
+    apiSecretKey: process.env.FUTBOSS_SHOPIFY_API_SECRET,
+    hostName: process.env.FUTBOSS_SHOPIFY_HOST_NAME,
     apiVersion: LATEST_API_VERSION,
     isCustomStoreApp: true,
     adminApiAccessToken: process.env.ADMIN_API_ACCESS_TOKEN,
-    privateAppStorefrontAccessToken: process.env.ADMIN_API_ACCESS_TOKEN
+    privateAppStorefrontAccessToken: process.env.FUTBOSS_ADMIN_API_ACCESS_TOKEN
 });
 
 const sessionFutboss = shopifyFutboss.session.customAppSession(process.env.SHOPIFY_HOST_NAME);
@@ -405,7 +405,7 @@ app.post('/api/payment', async (req, res) => {
             headers: {
                 'Content-Type': 'application/json',
                 'Cache-Control' : 'no-cache',
-                'X-Token': process.env.MONOBANK_TOKEN, // Токен Monobank
+                'X-Token': process.env.FUTBOSS_MONOBANK_TOKEN, // Токен Monobank
             },
         });
 
