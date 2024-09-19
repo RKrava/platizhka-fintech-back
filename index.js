@@ -6,7 +6,7 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const axios = require('axios')
 const WebSocket = require('ws');
-const http = require("http");
+const http = require('http');
 
 dotenv.config();
 
@@ -29,7 +29,7 @@ const shopifyFutboss = shopifyApi({
     privateAppStorefrontAccessToken: process.env.FUTBOSS_ADMIN_API_ACCESS_TOKEN
 });
 
-const sessionFutboss = shopifyFutboss.session.customAppSession(process.env.SHOPIFY_HOST_NAME);
+const sessionFutboss = shopifyFutboss.session.customAppSession(process.env.FUTBOSS_SHOPIFY_HOST_NAME);
 
 const storefrontClientFutboss = new shopifyFutboss.clients.Storefront({
     session: sessionFutboss
