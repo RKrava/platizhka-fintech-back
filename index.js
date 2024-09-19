@@ -25,7 +25,7 @@ const shopifyFutboss = shopifyApi({
     hostName: process.env.FUTBOSS_SHOPIFY_HOST_NAME,
     apiVersion: LATEST_API_VERSION,
     isCustomStoreApp: true,
-    adminApiAccessToken: process.env.ADMIN_API_ACCESS_TOKEN,
+    adminApiAccessToken: process.env.FUTBOSS_ADMIN_API_ACCESS_TOKEN,
     privateAppStorefrontAccessToken: process.env.FUTBOSS_ADMIN_API_ACCESS_TOKEN
 });
 
