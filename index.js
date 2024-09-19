@@ -113,7 +113,8 @@ const getCartShopify = async (cartId, storeId) => {
 }
 
 const getCustomersByContact = async (customerData, storeId) => {
-    const client = getShopifyApi(storeId).clients.Graphql({session: getShopifySession(storeId)});
+    const shopifyApi = getShopifyApi(storeId)
+    const client = new shopifyApi.clients.Graphql({session: getShopifySession(storeId)});
     const data = await client.query({
         data: `query {
             customers(first: 1, query: "email:${customerData.email} OR phone:${customerData.phone}") {
@@ -133,7 +134,8 @@ const getCustomersByContact = async (customerData, storeId) => {
 }
 
 const createCustomer = async (customerData, storeId) => {
-    const client = getShopifyApi(storeId).clients.Graphql({session: getShopifySession(storeId)});
+    const shopifyApi = getShopifyApi(storeId)
+    const client = new shopifyApi.clients.Graphql({session: getShopifySession(storeId)});
     const response = await client.query({
         data: {
             "query": `mutation customerCreate($input: CustomerInput!) {
@@ -180,7 +182,8 @@ const createDraftOrder = async (customerData, checkoutData, storeId) => {
     const customerIdByContact = await getCustomersByContact(customerData, storeId)
     const customerId = customerIdByContact ? customerIdByContact : await createCustomer(customerData, storeId)
 
-    const client = getShopifyApi(storeId).clients.Graphql({session: getShopifySession(storeId)});
+    const shopifyApi = getShopifyApi(storeId)
+    const client = new shopifyApi.clients.Graphql({session: getShopifySession(storeId)});
     const query = `mutation draftOrderCreate($input: DraftOrderInput!) {
       draftOrderCreate(input: $input) {
         draftOrder {
@@ -233,7 +236,8 @@ const createDraftOrder = async (customerData, checkoutData, storeId) => {
 };
 
 const completeDraftOrder = async (draftOrderId, paymentPending, storeId) => {
-    const client = getShopifyApi(storeId).clients.Graphql({session: getShopifySession(storeId)});
+    const shopifyApi = getShopifyApi(storeId)
+    const client = new shopifyApi.clients.Graphql({session: getShopifySession(storeId)});
     return await client.query({
         data: {
             "query": `mutation draftOrderComplete($id: ID!, $paymentPending: Boolean) {
