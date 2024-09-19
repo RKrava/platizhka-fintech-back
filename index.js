@@ -180,7 +180,7 @@ const createDraftOrder = async (customerData, checkoutData, storeId) => {
     const customerIdByContact = await getCustomersByContact(customerData, storeId)
     const customerId = customerIdByContact ? customerIdByContact : await createCustomer(customerData, storeId)
 
-    const client = new getShopifyApi().clients.Graphql({session: getShopifySession(storeId)});
+    const client = new getShopifyApi(storeId).clients.Graphql({session: getShopifySession(storeId)});
     const query = `mutation draftOrderCreate($input: DraftOrderInput!) {
       draftOrderCreate(input: $input) {
         draftOrder {
