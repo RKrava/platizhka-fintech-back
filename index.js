@@ -36,21 +36,21 @@ const storefrontClientFutboss = new shopifyFutboss.clients.Storefront({
 });
 
 const getStoreFrontClient = (storeId) => {
-    switch (storeId) {
+    switch (Number.parseInt(storeId)) {
         case 0: return storefrontClientFutboss
         default: return undefined;
     }
 }
 
 const getShopifyApi = (storeId) => {
-    switch (storeId) {
+    switch (Number.parseInt(storeId)) {
         case 0: return shopifyFutboss
         default: return undefined;
     }
 }
 
 const getShopifySession = (storeId) => {
-    switch (storeId) {
+    switch (Number.parseInt(storeId)) {
         case 0: return sessionFutboss
         default: return undefined;
     }
