@@ -304,10 +304,15 @@ const createOrder = async (cartId, customerData, pendingPayment, storeId) => {
     const cartLineIdArray = []
     const lineItems = cart.data.cart.lines.edges.map((item) => {
         cartLineIdArray.push(item.node.id)
-        return {
+        const lineItem = {
             variantId: item.node.merchandise.id,
-            quantity: item.node.quantity
+            quantity: item.node.quantity,
         }
+        if (item.node.attributes?.length) {
+            lineItem.customAttributes = item.node.attributes
+        }
+
+        return lineItem
     })
     const checkoutData = {
         lineItems,
