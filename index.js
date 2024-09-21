@@ -371,7 +371,7 @@ app.post('/createOrder', async (req, res) => {
         res.json(await createOrder(cartId, customerData, true, storeId))
     } catch (error) {
         console.error('Shopify request error:', error);
-        res.status(500).json({ error: 'Shopify API error' });
+        res.status(500).json({ error: error.toString() });
     }
 })
 
