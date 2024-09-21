@@ -110,6 +110,10 @@ const getCartShopify = async (cartId, storeId) => {
                   }
                 }
               }
+              attributes {
+                key
+                value
+              }
             }
           }
         }
