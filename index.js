@@ -68,7 +68,7 @@ const getShopifyApi = (storeId) => {
 const getShopifySession = (storeId) => {
     switch (Number.parseInt(storeId)) {
         case 0: return sessionFutboss
-        case 1: return sessionFutboss
+        case 1: return sessionBrick
         default: return undefined;
     }
 }
