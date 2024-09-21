@@ -19,7 +19,6 @@ const allowedIps = [
     '35.158.251.173'
 ];
 
-// Инициализация Shopify API клиента
 const shopifyFutboss = shopifyApi({
     apiSecretKey: process.env.FUTBOSS_SHOPIFY_API_SECRET,
     hostName: process.env.FUTBOSS_SHOPIFY_HOST_NAME,
@@ -35,9 +34,25 @@ const storefrontClientFutboss = new shopifyFutboss.clients.Storefront({
     session: sessionFutboss
 });
 
+const shopifyBrick = shopifyApi({
+    apiSecretKey: process.env.BRICK_SHOPIFY_API_SECRET,
+    hostName: process.env.BRICK_SHOPIFY_HOST_NAME,
+    apiVersion: LATEST_API_VERSION,
+    isCustomStoreApp: true,
+    adminApiAccessToken: process.env.BRICK_ADMIN_API_ACCESS_TOKEN,
+    privateAppStorefrontAccessToken: process.env.BRICK_ADMIN_API_ACCESS_TOKEN
+});
+
+const sessionBrick = shopifyBrick.session.customAppSession(process.env.BRICK_SHOPIFY_HOST_NAME);
+
+const storefrontClientBrick = new shopifyBrick.clients.Storefront({
+    session: sessionBrick
+});
+
 const getStoreFrontClient = (storeId) => {
     switch (Number.parseInt(storeId)) {
         case 0: return storefrontClientFutboss
+        case 1: return storefrontClientBrick
         default: return undefined;
     }
 }
@@ -45,6 +60,7 @@ const getStoreFrontClient = (storeId) => {
 const getShopifyApi = (storeId) => {
     switch (Number.parseInt(storeId)) {
         case 0: return shopifyFutboss
+        case 1: return shopifyBrick
         default: return undefined;
     }
 }
@@ -52,6 +68,7 @@ const getShopifyApi = (storeId) => {
 const getShopifySession = (storeId) => {
     switch (Number.parseInt(storeId)) {
         case 0: return sessionFutboss
+        case 1: return sessionFutboss
         default: return undefined;
     }
 }
