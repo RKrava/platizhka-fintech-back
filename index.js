@@ -466,7 +466,7 @@ app.post('/api/payment/mono', async (req, res) => {
 
     const paymentData = req.body;
 
-    console.log('Получены данные о платеже:', paymentData);
+    // console.log('Получены данные о платеже:', paymentData);
 
     // Расшифровка reference
     const decodedReference = JSON.parse(Buffer.from(paymentData.reference, 'base64').toString('utf-8'));
@@ -489,7 +489,8 @@ app.post('/api/payment/mono', async (req, res) => {
     // Проверка статуса платежа
     if (paymentData.status === 'success') {
         try {
-            const storeId = invoicesData.find((item) => Number.parseInt(item.invoiceId) === Number.parseInt(paymentData.invoiceId))[0]?.storeId
+            const storeId = invoicesData.find((item) => item.invoiceId === paymentData.invoiceId)[0]?.storeId
+            console.log(invoicesData)
             const createOrderResponse = await createOrder(
                 decodedReference.cartToken,
                 customerData,
