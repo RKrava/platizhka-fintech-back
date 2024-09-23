@@ -489,8 +489,7 @@ app.post('/api/payment/mono', async (req, res) => {
     // Проверка статуса платежа
     if (paymentData.status === 'success') {
         try {
-            const storeId = invoicesData.find((item) => item.invoiceId === paymentData.invoiceId)[0]?.storeId
-            console.log(invoicesData)
+            const storeId = invoicesData.find((item) => item.invoiceId === paymentData.invoiceId)?.storeId
             const createOrderResponse = await createOrder(
                 decodedReference.cartToken,
                 customerData,
