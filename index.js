@@ -435,7 +435,7 @@ app.post('/api/payment', async (req, res) => {
             headers: {
                 'Content-Type': 'application/json',
                 'Cache-Control' : 'no-cache',
-                'X-Token': process.env.FUTBOSS_MONOBANK_TOKEN, // Токен Monobank
+                'X-Token': Number.parseInt(storeId) === 0 ? process.env.FUTBOSS_MONOBANK_TOKEN : process.env.BRICK_MONOBANK_TOKEN, // Токен Monobank
             },
         });
 
