@@ -526,7 +526,7 @@ app.get('/api/payment/status', async (req, res) => {
 
         res.json({ paymentStatus: false });
     } catch (error) {
-        console.error('Shopify request error:', error);
+        console.error('Shopify request error: ', error);
         res.status(500).json({ error: 'Shopify API error' });
     }
 });
