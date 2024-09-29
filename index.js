@@ -49,15 +49,15 @@ const storefrontClientBrick = new shopifyBrick.clients.Storefront({
 });
 
 const shopifyUfighters = shopifyApi({
-    apiSecretKey: process.env.BRICK_SHOPIFY_API_SECRET,
-    hostName: process.env.BRICK_SHOPIFY_HOST_NAME,
+    apiSecretKey: process.env.UFIGHTERS_SHOPIFY_API_SECRET,
+    hostName: process.env.UFIGHTERS_SHOPIFY_HOST_NAME,
     apiVersion: LATEST_API_VERSION,
     isCustomStoreApp: true,
-    adminApiAccessToken: process.env.BRICK_ADMIN_API_ACCESS_TOKEN,
-    privateAppStorefrontAccessToken: process.env.BRICK_ADMIN_API_ACCESS_TOKEN
+    adminApiAccessToken: process.env.UFIGHTERS_ADMIN_API_ACCESS_TOKEN,
+    privateAppStorefrontAccessToken: process.env.UFIGHTERS_ADMIN_API_ACCESS_TOKEN
 });
 
-const sessionUfighters = shopifyUfighters.session.customAppSession(process.env.BRICK_SHOPIFY_HOST_NAME);
+const sessionUfighters = shopifyUfighters.session.customAppSession(process.env.UFIGHTERS_SHOPIFY_HOST_NAME);
 
 const storefrontClientUfighters = new shopifyUfighters.clients.Storefront({
     session: sessionUfighters
