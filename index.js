@@ -90,6 +90,15 @@ const getShopifySession = (storeId) => {
     }
 }
 
+const getMonobankToken = (storeId) => {
+    switch (Number.parseInt(storeId)) {
+        case 0: return process.env.FUTBOSS_MONOBANK_TOKEN
+        case 1: return process.env.BRICK_MONOBANK_TOKEN
+        case 2: return process.env.UFIGHTERS_MONOBANK_TOKEN
+        default: return undefined;
+    }
+}
+
 const getCartShopify = async (cartId, storeId) => {
     const cartQuery = `
          query getCart($cartId: ID!) {
@@ -448,7 +457,7 @@ app.post('/api/payment', async (req, res) => {
             headers: {
                 'Content-Type': 'application/json',
                 'Cache-Control' : 'no-cache',
-                'X-Token': Number.parseInt(storeId) === 0 ? process.env.FUTBOSS_MONOBANK_TOKEN : process.env.BRICK_MONOBANK_TOKEN, // Токен Monobank
+                'X-Token': getMonobankToken(storeId), // Токен Monobank
             },
         });
 
