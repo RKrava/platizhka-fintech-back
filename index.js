@@ -4,8 +4,7 @@ const { shopifyApi, LATEST_API_VERSION, DataType} = require('@shopify/shopify-ap
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
-const axios = require('axios')
-const WebSocket = require('ws');
+const axios = require('axios');
 const http = require('http');
 
 dotenv.config();
@@ -49,10 +48,26 @@ const storefrontClientBrick = new shopifyBrick.clients.Storefront({
     session: sessionBrick
 });
 
+const shopifyUfighters = shopifyApi({
+    apiSecretKey: process.env.BRICK_SHOPIFY_API_SECRET,
+    hostName: process.env.BRICK_SHOPIFY_HOST_NAME,
+    apiVersion: LATEST_API_VERSION,
+    isCustomStoreApp: true,
+    adminApiAccessToken: process.env.BRICK_ADMIN_API_ACCESS_TOKEN,
+    privateAppStorefrontAccessToken: process.env.BRICK_ADMIN_API_ACCESS_TOKEN
+});
+
+const sessionUfighters = shopifyUfighters.session.customAppSession(process.env.BRICK_SHOPIFY_HOST_NAME);
+
+const storefrontClientUfighters = new shopifyUfighters.clients.Storefront({
+    session: sessionUfighters
+});
+
 const getStoreFrontClient = (storeId) => {
     switch (Number.parseInt(storeId)) {
         case 0: return storefrontClientFutboss
         case 1: return storefrontClientBrick
+        case 2: return storefrontClientUfighters
         default: return undefined;
     }
 }
@@ -61,6 +76,7 @@ const getShopifyApi = (storeId) => {
     switch (Number.parseInt(storeId)) {
         case 0: return shopifyFutboss
         case 1: return shopifyBrick
+        case 2: return shopifyUfighters
         default: return undefined;
     }
 }
@@ -69,6 +85,7 @@ const getShopifySession = (storeId) => {
     switch (Number.parseInt(storeId)) {
         case 0: return sessionFutboss
         case 1: return sessionBrick
+        case 2: return sessionUfighters
         default: return undefined;
     }
 }
@@ -234,10 +251,6 @@ const createDraftOrder = async (customerData, checkoutData, storeId) => {
                     "tags": [
                         "Auto created",
                     ],
-                    "shippingLine": {
-                        "title": "Custom Shipping",
-                        "price": 4.55
-                    },
                     "shippingAddress": customerData.address,
                     // "billingAddress": {
                     //     "address1": "456 Main St",
