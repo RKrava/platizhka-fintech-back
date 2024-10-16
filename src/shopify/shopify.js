@@ -94,28 +94,28 @@ const createCustomer = async (customerData, storeId, shopData) => {
     const response = await client.query({
         data: {
             "query": `mutation customerCreate($input: CustomerInput!) {
-      customerCreate(input: $input) {
-        userErrors {
-          field
-          message
-        }
-        customer {
-          id
-          email
-          phone
-          taxExempt
-          firstName
-          lastName
-          addresses {
-            address1
-            city
-            country
-            phone
-            zip
-          }
-        }
-      }
-    }`,
+              customerCreate(input: $input) {
+                userErrors {
+                  field
+                  message
+                }
+                customer {
+                  id
+                  email
+                  phone
+                  taxExempt
+                  firstName
+                  lastName
+                  addresses {
+                    address1
+                    city
+                    country
+                    phone
+                    zip
+                  }
+                }
+              }
+            }`,
             "variables": {
                 "input": {
                     "email": customerData.email,
@@ -134,8 +134,8 @@ const createCustomer = async (customerData, storeId, shopData) => {
 }
 
 const createDraftOrder = async (customerData, checkoutData, storeId, shopData) => {
-    const customerIdByContact = await getCustomersByContact(customerData, storeId, shopData)
-    const customerId = customerIdByContact ? customerIdByContact : await createCustomer(customerData, storeId, shopData)
+    // const customerIdByContact = await getCustomersByContact(customerData, storeId, shopData)
+    // const customerId = customerIdByContact ? customerIdByContact : await createCustomer(customerData, storeId, shopData)
 
     const shopifyApi = await getShopifyApi(storeId, shopData)
     const client = new shopifyApi.clients.Graphql({session: await getShopifySession(storeId, shopData)});
@@ -153,7 +153,7 @@ const createDraftOrder = async (customerData, checkoutData, storeId, shopData) =
 
     const variables = {
         "input": {
-            "customerId": customerId,
+            // "customerId": customerId,
             "note": customerData.note,
             "phone": customerData.phone,
             "email": customerData.email,
