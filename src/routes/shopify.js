@@ -45,6 +45,7 @@ router.post('/order/create', async (req, res) => {
             hostName: shop.shopify_url,
             adminApiAccessToken: shop.admin_api_token
         };
+        customerData.payment = 'Накладений платіж'
         res.json(await createOrder(cartId, customerData, true, storeId, shopData))
     } catch (error) {
         console.error('Shopify request error:', error);
@@ -148,7 +149,8 @@ router.post('/payment/mono', async (req, res) => {
             city: decodedReference.city,
             country: 'Ukraine',
             zip: '00000'
-        }
+        },
+        payment: 'Monopay'
     }
 
     // Проверка статуса платежа

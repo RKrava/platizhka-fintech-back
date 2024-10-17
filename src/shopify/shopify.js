@@ -161,7 +161,7 @@ const createDraftOrder = async (customerData, checkoutData, storeId, shopData) =
                 { key: "Recipient Name", value: customerData.firstName + ' ' + customerData.lastName },
                 { key: "Recipient Phone", value: customerData.phone },
                 { key: "Recipient Email", value: customerData.email },
-                { key: "Payment", value: "Накладений платіж" },
+                { key: "Payment", value: customerData.payment },
                 { key: "Comment", value: customerData.note },
             ],
             "taxExempt": true,
