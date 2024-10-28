@@ -2,7 +2,6 @@ const express = require('express');
 const axios = require("axios");
 const {getCartShopify, createOrder} = require("../shopify/shopify");
 const Shop = require("../models/Shop");
-const Mono = require("../models/Mono"); // Добавляем импорт bcrypt
 
 const router = express.Router();
 
