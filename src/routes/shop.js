@@ -95,7 +95,7 @@ router.get('/id', async (req, res) => {
 });
 
 // Получить конфигурацию магазина
-router.get('/config-info', authMiddleware, async (req, res) => {
+router.get('/config-info', async (req, res) => {
   try {
     const shopId = req.query.shopId;
 

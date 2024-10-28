@@ -125,7 +125,7 @@ class Shop {
       let paramsNumber = 0
       
       if (success_page_config !== undefined) {
-        query += $` success_page_config = $${++paramsNumber},`;
+        query += ` success_page_config = $${++paramsNumber},`;
         params.push(JSON.stringify(success_page_config));
       }
       
