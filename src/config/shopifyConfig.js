@@ -1,5 +1,5 @@
 require('@shopify/shopify-api/adapters/node');
-const {shopifyApi, LATEST_API_VERSION} = require("@shopify/shopify-api");
+const {shopifyApi} = require("@shopify/shopify-api");
 require('dotenv').config();
 //
 // const shopifyFutboss = shopifyApi({
@@ -85,7 +85,7 @@ const getShopifyApi = async (storeId, shopData) => {
         shopifyCache.shopifyApis[storeId] = shopifyApi({
             apiSecretKey: shopData.apiSecretKey,
             hostName: shopData.hostName,
-            apiVersion: LATEST_API_VERSION,
+            apiVersion: '2024-10',
             isCustomStoreApp: true,
             adminApiAccessToken: shopData.adminApiAccessToken,
             privateAppStorefrontAccessToken: shopData.adminApiAccessToken

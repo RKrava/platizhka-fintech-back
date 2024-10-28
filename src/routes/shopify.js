@@ -23,7 +23,7 @@ router.get('/cart', async (req, res) => {
     try {
         const shop = await Shop.findById(req.query.storeId);
         const shopData = {
-            apiSecretKey: shop. storefront_api_token,
+            apiSecretKey: shop.storefront_api_token,
             hostName: shop.shopify_url,
             adminApiAccessToken: shop.admin_api_token
         };
