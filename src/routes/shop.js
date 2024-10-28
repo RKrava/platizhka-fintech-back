@@ -97,8 +97,9 @@ router.get('/id', async (req, res) => {
 // Получить конфигурацию магазина
 router.get('/config-info', async (req, res) => {
   try {
-    const shopId = req.query.shopId;
 
+    const shopId = req.query.shopId;
+    console.log(shopId);
     if (!shopId) {
       return res.status(400).json({ message: 'Не указан идентификатор магазина' });
     }
@@ -109,9 +110,9 @@ router.get('/config-info', async (req, res) => {
       return res.status(404).json({ message: 'Магазин не найден' });
     }
     
-    if (shop.user_id !== req.user.id) {
+    /*if (shop.user_id !== req.user.id) {
       return res.status(403).json({ message: 'У вас нет доступа к этому магазину' });
-    }
+    }*/
     
     res.json({
       success_page_config: shop.success_page_config,
@@ -131,9 +132,9 @@ router.post('/config', authMiddleware, async (req, res) => {
       return res.status(400).json({ message: 'Не указан идентификатор магазина' });
     }
 
-    const { success_page_config, cart_page_config } = req.body;
+    const { success_page_config, cart_page_config, mono_token } = req.body;
     // Проверяем, что хотя бы один из параметров конфигурации не пустой
-    if (!success_page_config && !cart_page_config) {
+    if (!success_page_config && !cart_page_config && !mono_token) {
       return res.status(400).json({ message: 'Вы не изменили никаких настроек конфигурации' });
     }
     
@@ -147,7 +148,7 @@ router.post('/config', authMiddleware, async (req, res) => {
       return res.status(403).json({ message: 'У вас нет доступа к этому магазину' });
     }
     
-    await Shop.updateConfig(shopId, success_page_config, cart_page_config);
+    await Shop.updateConfig(shopId, success_page_config, cart_page_config, mono_token);
     
     res.json({ message: 'Конфигурация магазина обновлена успешно' });
   } catch (error) {

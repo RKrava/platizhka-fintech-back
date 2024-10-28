@@ -98,13 +98,15 @@ router.post('/payment', async (req, res) => {
         validity: 3600, // Время действия инвойса
         paymentType: "debit",
     };
-
     try {
+        const shop = await Shop.findById(storeId);
+        console.log(shop)
+        console.log(shop.mono_token)
         const response = await axios.post('https://api.monobank.ua/api/merchant/invoice/create', invoiceData, {
             headers: {
                 'Content-Type': 'application/json',
                 'Cache-Control' : 'no-cache',
-                'X-Token': (await Mono.findByStoreId(storeId)).token,
+                'X-Token': shop.mono_token,
             },
         });
 
