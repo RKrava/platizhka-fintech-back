@@ -3,24 +3,33 @@ const bcrypt = require('bcryptjs'); // Добавляем импорт bcrypt
 const Shop = require('../models/Shop');
 const User = require('../models/User');
 const authMiddleware = require('../middleware/auth');
+const { initialConfig } = require("../shopify/shopify");
 
 const router = express.Router();
-
-// Добавьте эту строку перед определением маршрутов
 router.use(express.json());
 
 router.post('/create-shop', authMiddleware, async (req, res) => {
   try {
     const { name, description, shopify_url, domain_url, admin_api_token, storefront_api_token } = req.body;
-    const user_id = req.user.id; // Предполагается, что ID пользователя доступен после аутентификации
+    const user_id = req.user.id;
+
     if (!name || !description || !shopify_url || !domain_url || !admin_api_token || !storefront_api_token) {
       return res.status(400).json({ message: 'Все поля обязательны для заполнения' });
     }
+
+    const shopifyData = {
+      apiSecretKey: storefront_api_token,
+      hostName: shopify_url,
+      adminApiAccessToken: admin_api_token
+    };
+
+    await initialConfig(shopifyData);
 
     const shopData = { user_id, name, description, shopify_url, domain_url, admin_api_token, storefront_api_token };
     const shopId = await Shop.create(shopData);
     res.status(201).json({ message: 'Магазин успешно создан', shopId });
   } catch (error) {
+    console.log(error)
     res.status(500).json({ message: 'Ошибка при создании магазина', error: error.message });
   }
 });
