@@ -278,7 +278,8 @@ const createOrder = async (cartId, customerData, pendingPayment, storeId, shopDa
         address: customerData.address.address1,
         city: customerData.address.city,
         country: customerData.address.country,
-        store_id: Number(storeId)
+        store_id: Number(storeId),
+        checkoutData: JSON.stringify(checkoutData)
     }).save()
 
     const draftOrderData = await createDraftOrder(customerData, checkoutData, storeId, shopData)

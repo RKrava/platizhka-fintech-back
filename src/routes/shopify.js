@@ -2,13 +2,13 @@ const express = require('express');
 const axios = require("axios");
 const {getCartShopify, createOrder} = require("../shopify/shopify");
 const Shop = require("../models/Shop");
+const Invoice = require("../models/Invoice");
+const Order = require("../models/Order");
 
 const router = express.Router();
 
 // Добавьте эту строку перед определением маршрутов
 router.use(express.json());
-
-let invoicesData = []
 
 const allowedIps = [
     '35.158.201.27',
@@ -80,6 +80,7 @@ router.post('/payment', async (req, res) => {
         comment: formData.comment,
         warehouse: formData.warehouse,
         city: formData.city,
+        store_id: Number(storeId),
     })).toString('base64');
 
     const totalAmount = cartData.reduce((acc, item) => acc + (item.price * item.count * 100), 0);
@@ -99,8 +100,7 @@ router.post('/payment', async (req, res) => {
     };
     try {
         const shop = await Shop.findById(storeId);
-        console.log(shop)
-        console.log(shop.mono_token)
+
         const response = await axios.post('https://api.monobank.ua/api/merchant/invoice/create', invoiceData, {
             headers: {
                 'Content-Type': 'application/json',
@@ -109,7 +109,7 @@ router.post('/payment', async (req, res) => {
             },
         });
 
-        invoicesData.push( {invoiceId: response.data.invoiceId, status: false, storeId} )
+        await new Invoice({id: response.data.invoiceId,status: false, storeid: storeId }).save()
 
         res.json({
             success: true,
@@ -157,7 +157,9 @@ router.post('/payment/mono', async (req, res) => {
     // Проверка статуса платежа
     if (paymentData.status === 'success') {
         try {
-            const storeId = invoicesData.find((item) => item.invoiceId === paymentData.invoiceId)?.storeId
+            console.log('MONOBANK INVOICEID:' + paymentData.invoiceId)
+            const invoice = await Invoice.findById(paymentData.invoiceId)
+            const storeId = !invoice ? decodedReference.store_id : invoice.storeid
             const shop = await Shop.findById(storeId);
             const shopData = {
                 apiSecretKey: shop.storefront_api_token,
@@ -172,12 +174,7 @@ router.post('/payment/mono', async (req, res) => {
                 shopData
             );
 
-            invoicesData = invoicesData.map((invoiceData) => {
-                if (invoiceData.invoiceId === paymentData.invoiceId) {
-                    return { ...invoiceData, status: true };
-                }
-                return invoiceData
-            });
+            await invoice.changeStatus()
 
             return res.status(200).json({ message: 'Order created', data: createOrderResponse });
         } catch (error) {
@@ -192,13 +189,14 @@ router.post('/payment/mono', async (req, res) => {
 router.get('/payment/status', async (req, res) => {
     const { invoiceId } = req.query;
     try {
-        const invoiceData = invoicesData.filter((item) => item.invoiceId == invoiceId)
-        if (invoiceData[0]) {
-            res.json({ paymentStatus: invoiceData[0]?.status });
+        const invoice = await Invoice.findById(invoiceId)
+        if (!invoice) {
+            res.json({ paymentStatus: false });
             return
         }
 
-        res.json({ paymentStatus: false });
+        res.json({ paymentStatus: invoice.status });
+
     } catch (error) {
         console.error('Shopify request error: ', error);
         res.status(500).json({ error: 'Shopify API error' });
