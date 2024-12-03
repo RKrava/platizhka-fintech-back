@@ -286,6 +286,7 @@ const createOrder = async (cartId, customerData, pendingPayment, storeId, shopDa
 
     if (draftOrderData.body.data.draftOrderCreate.userErrors.length > 0) {
         console.log(draftOrderData.body.data.draftOrderCreate.userErrors)
+        return { userErrors: draftOrderData.body.data.draftOrderCreate.userErrors }
     }
 
     const completeOrderData = await completeDraftOrder(draftOrderData.body.data.draftOrderCreate.draftOrder.id,
