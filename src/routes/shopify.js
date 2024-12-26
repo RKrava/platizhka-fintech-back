@@ -135,6 +135,7 @@ router.post('/payment/mono', async (req, res) => {
     }
 
     const paymentData = req.body;
+    console.log(paymentData)
 
     // Расшифровка reference
     const decodedReference = JSON.parse(Buffer.from(paymentData.reference, 'base64').toString('utf-8'));
