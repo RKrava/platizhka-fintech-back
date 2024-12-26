@@ -138,6 +138,7 @@ router.post('/payment/mono', async (req, res) => {
     }
 
     const paymentData = req.body;
+    console.log(paymentData)
 
     
     // Расшифровка reference
