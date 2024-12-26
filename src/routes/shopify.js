@@ -81,6 +81,9 @@ router.post('/payment', async (req, res) => {
         warehouse: formData.warehouse,
         city: formData.city,
         store_id: Number(storeId),
+        gclid: formData.gclid, //_gcl_aw
+        clientId: formData.clientId, //client_id
+        cartDataGA4: formData.cartData //cartData
     })).toString('base64');
 
     const totalAmount = cartData.reduce((acc, item) => acc + (item.price * item.count * 100), 0);
@@ -136,8 +139,11 @@ router.post('/payment/mono', async (req, res) => {
 
     const paymentData = req.body;
 
+    
     // Расшифровка reference
     const decodedReference = JSON.parse(Buffer.from(paymentData.reference, 'base64').toString('utf-8'));
+
+    console.log('decodedReference cartData', decodedReference.cartDataGA4)
 
     const customerData = {
         firstName: decodedReference.firstName,
@@ -176,6 +182,56 @@ router.post('/payment/mono', async (req, res) => {
 
             await invoice.changeStatus()
 
+            const cartDataGA4 = JSON.parse(decodedReference.cartDataGA4)
+            console.log('cartDataGA4', cartDataGA4)
+
+            if (
+                decodedReference.store_id === 1 && cartDataGA4 && cartDataGA4.lines && cartDataGA4.lines.edges && cartDataGA4.lines.edges.length <= 0
+            ) {
+                console.error('Cart data is missing, invalid, or empty or store_id is not 1:', decodedReference.cartDataGA4);
+            } else {
+                try {
+                    // Инициализация массива товаров и расчёт суммы
+                    const items = [];
+                    const value = Math.round(cartDataGA4.estimatedCost.totalAmount.amount / 2);
+            
+                    cartDataGA4.lines.edges.forEach((edge) => {
+                        const product = edge.node.merchandise.product;
+                        const variant = edge.node.merchandise;
+            
+                        const productId = product.id.split('/').pop();
+                        const variantId = variant.id.split('/').pop();
+                        const customId = `shopify_UA_${productId}_${variantId}`;
+            
+                        items.push({
+                            item_id: customId,
+                            item_name: product.title,
+                            quantity: edge.node.quantity,
+                            price: parseFloat(variant.price.amount),
+                        });
+                    });
+            
+                    // Отправка в GA4, если есть gclid
+                    if (decodedReference.gclid) {
+                        console.log('Sending GA4 Conversion:', {
+                            clientId: decodedReference.clientId,
+                            transactionId: paymentData.invoiceId,
+                            value,
+                            items,
+                        });
+        
+                        sendGA4Conversion(decodedReference.clientId, paymentData.invoiceId, value, items); 
+                    
+                    } else {
+                        console.warn('GCLID отсутствует, пропуск отправки в GA4');
+                    }
+                } catch (error) {
+                    console.error('Ошибка обработки cartDataGA4 для GA4:', error);
+                }
+            }
+
+            
+            
             return res.status(200).json({ message: 'Order created', data: createOrderResponse });
         } catch (error) {
             console.error('Ошибка при создании заказа:', error);

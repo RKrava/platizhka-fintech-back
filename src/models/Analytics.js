@@ -30,4 +30,6 @@ class Analytics {
     }
 }
 
+
+
 module.exports = Analytics;
