@@ -29,3 +29,5 @@ async function sendGA4Conversion(client_id, transactionId, value, items) {
         console.error('Ошибка отправки в GA4:', error.response?.data || error.message);
     }
 }
+
+export { sendGA4Conversion };

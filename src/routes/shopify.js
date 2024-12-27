@@ -3,7 +3,7 @@ const axios = require("axios");
 const {getCartShopify, createOrder} = require("../shopify/shopify");
 const Shop = require("../models/Shop");
 const Invoice = require("../models/Invoice");
-const Order = require("../models/Order");
+const { sendGA4Conversion } = require('../services/ga4');
 
 const router = express.Router();
 
@@ -221,7 +221,7 @@ router.post('/payment/mono', async (req, res) => {
                             items,
                         });
         
-                        sendGA4Conversion(decodedReference.clientId, paymentData.invoiceId, value, items); 
+                        await sendGA4Conversion(decodedReference.clientId, paymentData.invoiceId, value, items); 
                     
                     } else {
                         console.warn('GCLID отсутствует, пропуск отправки в GA4');
