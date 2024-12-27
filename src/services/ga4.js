@@ -18,7 +18,7 @@ async function sendGA4Conversion(client_id, transactionId, value, items) {
 
     try {
         const response = await axios.post(
-            'https://www.google-analytics.com/mp/collect?measurement_id=G-0N0XKJ9EFBD&api_secret=QwhNuKsYTeCWvH7lXR9ISA',
+            'https://www.google-analytics.com/mp/collect?measurement_id=G-0N0XKJ9EFB&api_secret=QwhNuKsYTeCWvH7lXR9ISA',
             payload,
             {
                 headers: {
