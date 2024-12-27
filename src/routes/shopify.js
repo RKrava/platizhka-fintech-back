@@ -131,7 +131,7 @@ router.post('/payment', async (req, res) => {
 router.post('/payment/mono', async (req, res) => {
     const clientIp = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
 
-    // Проверяем, что IP-адрес отправителя разрешен
+    // Проверяем, что IP-адрес отправителя разрешен 
     if (!allowedIps.includes(clientIp)) {
         console.warn(`Запрос от неразрешенного IP-адреса: ${clientIp}`);
         return res.status(403).json({ message: 'Доступ запрещен' });
