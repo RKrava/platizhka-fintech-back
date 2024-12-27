@@ -10,7 +10,8 @@ async function sendGA4Conversion(client_id, transactionId, value, items) {
                     transaction_id: transactionId, // ID транзакции
                     value: value, // Сумма покупки
                     currency: "UAH", // Валюта
-                    items: items, // Массив товаров
+                    items: items, // Массив товаров,
+                    debug_mode: true
                 },
             },
         ],
