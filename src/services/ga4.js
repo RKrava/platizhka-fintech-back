@@ -1,3 +1,5 @@
+const axios = require('axios');
+
 async function sendGA4Conversion(client_id, transactionId, value, items) {
     const payload = {
         client_id: client_id, // Извлечённый из `_ga`
