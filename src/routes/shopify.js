@@ -144,7 +144,9 @@ router.post('/payment/mono', async (req, res) => {
     // Расшифровка reference
     const decodedReference = JSON.parse(Buffer.from(paymentData.reference, 'base64').toString('utf-8'));
 
-    console.log('decodedReference cartData', decodedReference.cartDataGA4)
+    if (decodedReference.cartDataGA4) {
+        console.log('decodedReference cartData', decodedReference.cartDataGA4)
+    }
 
     const customerData = {
         firstName: decodedReference.firstName,
@@ -213,7 +215,7 @@ router.post('/payment/mono', async (req, res) => {
                     });
             
                     // Отправка в GA4, если есть gclid
-                    if (decodedReference.gclid) {
+                    if (decodedReference.clientId) {
                         console.log('Sending GA4 Conversion:', {
                             clientId: decodedReference.clientId,
                             transactionId: paymentData.invoiceId,
