@@ -4,7 +4,7 @@ const {getCartShopify, createOrder} = require("../shopify/shopify");
 const Shop = require("../models/Shop");
 const Invoice = require("../models/Invoice");
 const { sendGA4Conversion } = require('../services/ga4');
-
+const GATrackingData = require("../models/GATrackingData");
 const router = express.Router();
 
 // Добавьте эту строку перед определением маршрутов
@@ -81,9 +81,9 @@ router.post('/payment', async (req, res) => {
         warehouse: formData.warehouse,
         city: formData.city,
         store_id: Number(storeId),
-        gclid: formData.gclid, //_gcl_aw
-        clientId: formData.clientId, //client_id
-        cartDataGA4: formData.cartData //cartData
+        // gclid: formData.gclid, //_gcl_aw
+        // clientId: formData.clientId, //client_id
+        // cartDataGA4: formData.cartData //cartData
     })).toString('base64');
 
     const totalAmount = cartData.reduce((acc, item) => acc + (item.price * item.count * 100), 0);
@@ -101,10 +101,11 @@ router.post('/payment', async (req, res) => {
         validity: 3600, // Время действия инвойса 
         paymentType: "debit",
     };
+
     try {
         const shop = await Shop.findById(storeId);
 
-        const response = await axios.post('https://api.monobank.ua/api/merchant/invoice/create', invoiceData, {
+        const response = await axios.post('https://api.monobank.ua/api/A/invoice/create', invoiceData, {
             headers: {
                 'Content-Type': 'application/json',
                 'Cache-Control' : 'no-cache',
@@ -112,7 +113,9 @@ router.post('/payment', async (req, res) => {
             },
         });
 
-        await new Invoice({id: response.data.invoiceId,status: false, storeid: storeId }).save()
+        await new Invoice({id: response.data.invoiceId, status: false, storeid: storeId }).save()
+
+        await new GATrackingData({id: response.data.invoiceId, gclid: formData.gclid, clientId: formData.clientId, cartDataGA4: JSON.stringify(formData.cartDataGA4)}).save()
 
         res.json({
             success: true,
@@ -140,13 +143,12 @@ router.post('/payment/mono', async (req, res) => {
     const paymentData = req.body;
     console.log(paymentData)
 
-    
     // Расшифровка reference
     const decodedReference = JSON.parse(Buffer.from(paymentData.reference, 'base64').toString('utf-8'));
 
-    if (decodedReference.cartDataGA4) {
-        console.log('decodedReference cartData', decodedReference.cartDataGA4)
-    }
+    // if (decodedReference.cartDataGA4) {
+    //     console.log('decodedReference cartData', decodedReference.cartDataGA4)
+    // }
 
     const customerData = {
         firstName: decodedReference.firstName,
@@ -169,6 +171,7 @@ router.post('/payment/mono', async (req, res) => {
             console.log('MONOBANK INVOICEID:' + paymentData.invoiceId)
             const invoice = await Invoice.findById(paymentData.invoiceId)
             const storeId = !invoice ? decodedReference.store_id : invoice.storeid
+            const gaTrackingData = await GATrackingData.findById(paymentData.invoiceId)
             const shop = await Shop.findById(storeId);
             const shopData = {
                 apiSecretKey: shop.storefront_api_token,
@@ -185,13 +188,13 @@ router.post('/payment/mono', async (req, res) => {
 
             await invoice.changeStatus()
 
-            const cartDataGA4 = JSON.parse(decodedReference.cartDataGA4)
+            const cartDataGA4 = gaTrackingData.cartDataGA4 ? JSON.parse(gaTrackingData.cartDataGA4) : null
             console.log('cartDataGA4', cartDataGA4)
 
             if (
                 decodedReference.store_id === 1 && cartDataGA4 && cartDataGA4.lines && cartDataGA4.lines.edges && cartDataGA4.lines.edges.length <= 0
             ) {
-                console.error('Cart data is missing, invalid, or empty or store_id is not 1:', decodedReference.cartDataGA4);
+                console.error('Cart data is missing, invalid, or empty or store_id is not 1:', cartDataGA4);
             } else {
                 try {
                     // Инициализация массива товаров и расчёт суммы
@@ -213,18 +216,16 @@ router.post('/payment/mono', async (req, res) => {
                             price: parseFloat(variant.price.amount),
                         });
                     });
-            
-                    // Отправка в GA4, если есть gclid
-                    if (decodedReference.clientId) {
+
+                    if (gaTrackingData.clientId) {
                         console.log('Sending GA4 Conversion:', {
-                            clientId: decodedReference.clientId,
+                            clientId: gaTrackingData.clientId,
                             transactionId: paymentData.invoiceId,
                             value,
                             items,
                         });
-        
-                        await sendGA4Conversion(decodedReference.clientId, paymentData.invoiceId, value, items); 
-                    
+
+                        await sendGA4Conversion(gaTrackingData.clientId, paymentData.invoiceId, value, items);
                     } else {
                         console.warn('GCLID отсутствует, пропуск отправки в GA4');
                     }
@@ -233,8 +234,6 @@ router.post('/payment/mono', async (req, res) => {
                 }
             }
 
-            
-            
             return res.status(200).json({ message: 'Order created', data: createOrderResponse });
         } catch (error) {
             console.error('Ошибка при создании заказа:', error);
