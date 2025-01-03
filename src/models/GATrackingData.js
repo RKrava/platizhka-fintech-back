@@ -11,7 +11,7 @@ class GATrackingData {
     async save() {
         return new Promise((resolve, reject) => {
             db.query(
-                `INSERT INTO ga_tracking_data (id, gclid, clientId, cartDataGA4) 
+                `INSERT INTO ga_tracking_data (id, gclid, client_id, cart_data_ga4) 
                  VALUES ($1, $2, $3, $4)`,
                 [this.id, this.gclid, this.clientId, this.cartDataGA4],
                 function (err, result) {
@@ -31,7 +31,5 @@ class GATrackingData {
         });
     }
 }
-
-
 
 module.exports = GATrackingData;
