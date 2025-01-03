@@ -115,7 +115,7 @@ router.post('/payment', async (req, res) => {
 
         await new Invoice({id: response.data.invoiceId, status: false, storeid: storeId }).save()
 
-        await new GATrackingData({id: response.data.invoiceId, gclid: formData.gclid, clientId: formData.clientId, cartDataGA4: JSON.stringify(formData.cartDataGA4)}).save()
+        await new GATrackingData({id: response.data.invoiceId, gclid: formData.gclid, clientId: formData.clientId, cartDataGA4: JSON.stringify(formData.cartData)}).save()
 
         res.json({
             success: true,
