@@ -105,7 +105,7 @@ router.post('/payment', async (req, res) => {
     try {
         const shop = await Shop.findById(storeId);
 
-        const response = await axios.post('https://api.monobank.ua/api/A/invoice/create', invoiceData, {
+        const response = await axios.post('https://api.monobank.ua/api/merchant/invoice/create', invoiceData, {
             headers: {
                 'Content-Type': 'application/json',
                 'Cache-Control' : 'no-cache',
