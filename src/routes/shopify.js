@@ -188,7 +188,7 @@ router.post('/payment/mono', async (req, res) => {
 
             await invoice.changeStatus()
 
-            const cartDataGA4 = gaTrackingData.cartDataGA4 ? JSON.parse(gaTrackingData.cartDataGA4) : null
+            const cartDataGA4 = gaTrackingData.cart_data_ga4 ? JSON.parse(gaTrackingData.cart_data_ga4) : null
             console.log('cartDataGA4', cartDataGA4)
 
             if (
