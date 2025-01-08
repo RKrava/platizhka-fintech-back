@@ -217,15 +217,15 @@ router.post('/payment/mono', async (req, res) => {
                         });
                     });
 
-                    if (gaTrackingData.clientId) {
+                    if (gaTrackingData.client_id) {
                         console.log('Sending GA4 Conversion:', {
-                            clientId: gaTrackingData.clientId,
+                            clientId: gaTrackingData.client_id,
                             transactionId: paymentData.invoiceId,
                             value,
                             items,
                         });
 
-                        await sendGA4Conversion(gaTrackingData.clientId, paymentData.invoiceId, value, items);
+                        await sendGA4Conversion(gaTrackingData.client_id, paymentData.invoiceId, value, items);
                     } else {
                         console.warn('GCLID отсутствует, пропуск отправки в GA4');
                     }
