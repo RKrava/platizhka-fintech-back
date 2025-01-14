@@ -199,7 +199,7 @@ router.post('/payment/mono', async (req, res) => {
                 try {
                     // Инициализация массива товаров и расчёт суммы
                     const items = [];
-                    const value = Math.round(cartDataGA4.estimatedCost.totalAmount.amount / 2);
+                    const value = Math.round(cartDataGA4.estimatedCost.totalAmount.amount);
             
                     cartDataGA4.lines.edges.forEach((edge) => {
                         const product = edge.node.merchandise.product;
