@@ -86,6 +86,7 @@ router.post('/payment', async (req, res) => {
         // cartDataGA4: formData.cartData //cartData
     })).toString('base64');
 
+    console.log(cartData)
     const totalAmount = cartData.reduce((acc, item) => acc + (item.price * item.count * 100), 0);
 
     const invoiceData = {

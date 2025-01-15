@@ -71,7 +71,6 @@ class Shop {
       db.query('SELECT * FROM shops WHERE id = $1', [id], (err, result) => {
         if (err) reject(err);
         const row = result?.rows[0]
-        console.log(row);
         if (row) {
           // Проверка и парсинг success_page_config
           if (row.success_page_config) {

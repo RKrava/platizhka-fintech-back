@@ -80,7 +80,6 @@ router.get('/id', async (req, res) => {
     if (!host_url) {
       return res.status(400).json({ message: 'Не указан домен магазина' });
     }
-    console.log(host_url)
     const shop = await Shop.findByHost(host_url);
 
     if (!shop) {
@@ -99,7 +98,6 @@ router.get('/config-info', async (req, res) => {
   try {
 
     const shopId = req.query.shopId;
-    console.log(shopId);
     if (!shopId) {
       return res.status(400).json({ message: 'Не указан идентификатор магазина' });
     }
