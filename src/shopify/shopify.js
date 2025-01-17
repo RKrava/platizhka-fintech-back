@@ -232,6 +232,26 @@ const clearCart = async (cartId, cartLineIdArray, storeId, shopData) => {
 
 }
 
+const sendTelegramMessage = async (message) => {
+    try {
+        const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+        const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+        
+        if (!BOT_TOKEN || !CHAT_ID) {
+            console.error('Telegram credentials not configured');
+            return;
+        }
+
+        await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+            chat_id: CHAT_ID,
+            text: message,
+            parse_mode: 'HTML'
+        });
+    } catch (error) {
+        console.error('Error sending telegram message:', error);
+    }
+};
+
 const createOrder = async (cartId, customerData, pendingPayment, storeId, shopData) => {
     const cart = await getCartShopify(cartId, storeId, shopData)
     const cartLineIdArray = []
@@ -286,6 +306,11 @@ const createOrder = async (cartId, customerData, pendingPayment, storeId, shopDa
 
     if (draftOrderData.body.data.draftOrderCreate.userErrors.length > 0) {
         console.log(draftOrderData.body.data.draftOrderCreate.userErrors)
+        const errorMessage = `❌ Order Creation Error:
+Store ID: ${storeId}
+Customer: ${customerData.firstName} ${customerData.lastName}
+Errors: ${JSON.stringify(draftOrderData.body.data.draftOrderCreate.userErrors)}`;
+        await sendTelegramMessage(errorMessage);
         return { userErrors: draftOrderData.body.data.draftOrderCreate.userErrors }
     }
 
