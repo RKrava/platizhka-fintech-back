@@ -309,6 +309,13 @@ const createOrder = async (cartId, customerData, pendingPayment, storeId, shopDa
         const errorMessage = `❌ Order Creation Error:
 Store ID: ${storeId}
 Customer: ${customerData.firstName} ${customerData.lastName}
+Phone: ${customerData.phone}
+Email: ${customerData.email}
+Address: ${customerData.address.address1}
+City: ${customerData.address.city}
+Country: ${customerData.address.country}
+checkoutData: ${JSON.stringify(checkoutData)}
+note: ${customerData.note}
 Errors: ${JSON.stringify(draftOrderData.body.data.draftOrderCreate.userErrors)}`;
         await sendTelegramMessage(errorMessage);
         return { userErrors: draftOrderData.body.data.draftOrderCreate.userErrors }
