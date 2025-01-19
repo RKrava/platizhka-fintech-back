@@ -31,7 +31,7 @@ router.get('/create/order', async (req, res) => {
             name: edge.node.merchandise.product.title + " - " + (edge.node.merchandise.title === "Default Title" || edge.node.merchandise.title === "mczr_price_1490" ? "" : edge.node.merchandise.title),
             price: edge.node.attributes.find((attr) => attr.key === '_mczr_price') ? parseFloat(edge.node.attributes.find((attr) => attr.key === '_mczr_price').value) : parseFloat(edge.node.merchandise.price.amount),
             cnt: edge.node.quantity,
-            image: edge.node.attributes.find((attr) => attr.key === '_mczr_image') ? edge.node.attributes.find((attr) => attr.key === '_mczr_image').value : edge.node.merchandise.product.images.edges[0]?.node.url || '/default-image.jpg'
+            product_img_src: edge.node.attributes.find((attr) => attr.key === '_mczr_image') ? edge.node.attributes.find((attr) => attr.key === '_mczr_image').value : edge.node.merchandise.product.images.edges[0]?.node.url || '/default-image.jpg'
         }));
 
         let paymentMethodList = [];
