@@ -324,7 +324,7 @@ Errors: ${JSON.stringify(draftOrderData.body.data.draftOrderCreate.userErrors)}`
     const completeOrderData = await completeDraftOrder(draftOrderData.body.data.draftOrderCreate.draftOrder.id,
         pendingPayment, storeId, shopData)
     const clearCartResponse = await clearCart(cartId, cartLineIdArray, storeId, shopData)
-    console.log(clearCartResponse)
+    console.log(JSON.stringify(clearCartResponse))
 
     return completeOrderData.body.data;
 }
