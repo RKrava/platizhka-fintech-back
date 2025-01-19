@@ -46,7 +46,7 @@ router.get('/create/order', async (req, res) => {
             order_ref: cartid + "_" + Date.now(),
             amount: Math.round(parseFloat(cartData.estimatedCost.totalAmount.amount)),
             ccy: 980,
-            count: cartData.lines.edges.length,
+            count: cartData.lines.edges.reduce((acc, edge) => acc + edge.node.quantity, 0),
             products: newCartItems,
             dlv_method_list: [
                 "np_brnm",
