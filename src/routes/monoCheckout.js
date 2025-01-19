@@ -145,9 +145,9 @@ router.post('/payment', async (req, res) => {
             let createOrderResponse;
             if (paymentData.payment_method === 'payment_on_delivery') {
                 customerData.payment = 'Накладений платіж'
-                createOrderResponse = await createOrder(paymentData.basket_id, customerData, true, invoice.storeid, shopData)
+                createOrderResponse = await createOrder(paymentData.basket_id.split('_')[0], customerData, true, invoice.storeid, shopData)
             } else {
-                createOrderResponse = await createOrder(paymentData.basket_id, customerData, false, invoice.storeid, shopData)
+                createOrderResponse = await createOrder(paymentData.basket_id.split('_')[0], customerData, false, invoice.storeid, shopData)
             }
 
             await invoice.changeStatus();
