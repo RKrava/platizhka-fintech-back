@@ -323,7 +323,8 @@ Errors: ${JSON.stringify(draftOrderData.body.data.draftOrderCreate.userErrors)}`
 
     const completeOrderData = await completeDraftOrder(draftOrderData.body.data.draftOrderCreate.draftOrder.id,
         pendingPayment, storeId, shopData)
-    await clearCart(cartId, cartLineIdArray, storeId, shopData)
+    const clearCartResponse = await clearCart(cartId, cartLineIdArray, storeId, shopData)
+    console.log(clearCartResponse)
 
     return completeOrderData.body.data;
 }
