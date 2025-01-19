@@ -34,11 +34,13 @@ router.get('/create/order', async (req, res) => {
             image: edge.node.attributes.find((attr) => attr.key === '_mczr_image') ? edge.node.attributes.find((attr) => attr.key === '_mczr_image').value : edge.node.merchandise.product.images.edges[0]?.node.url || '/default-image.jpg'
         }));
 
-        let paymentMethodList = ["card"];
+        let paymentMethodList = [];
         
         if (cartData.lines.edges.some((edge) => edge.node.merchandise.product.handle != "counstructor-odyagu")) {
             paymentMethodList.push("payment_on_delivery");
         }
+
+        paymentMethodList.push("card");
 
         const requestData = {
             order_ref: cartid + "_" + Date.now(),
