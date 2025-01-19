@@ -85,8 +85,8 @@ router.get('/id', async (req, res) => {
     if (!shop) {
       return res.status(404).json({ message: 'Магазин не найден' });
     }
-
-    res.json({ id: shop.id });
+    
+    res.json({ id: shop.id, mono_checkout: !!shop.mono_checkout_token });
   } catch (error) {
     console.error('Ошибка при получении магазина:', error);
     res.status(500).json({ message: 'Внутренняя ошибка сервера' });

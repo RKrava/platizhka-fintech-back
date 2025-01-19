@@ -110,7 +110,7 @@ router.post('/payment', async (req, res) => {
             headers: {
                 'Content-Type': 'application/json',
                 'Cache-Control' : 'no-cache',
-                'X-Token': shop.mono_token,
+                'X-Token': shop.mono_checkout_token
             },
         });
 

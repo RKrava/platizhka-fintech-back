@@ -26,7 +26,7 @@ const defaultCartPageConfig = {
 };
 
 class Shop {
-  constructor({ id, user_id, name, description, shopify_url, domain_url, admin_api_token, storefront_api_token, success_page_config, cart_page_config,mono_token }) {
+  constructor({ id, user_id, name, description, shopify_url, domain_url, admin_api_token, storefront_api_token, success_page_config, cart_page_config, mono_token, mono_checkout_token }) {
     this.id = id;
     this.user_id = user_id;
     this.name = name;
@@ -37,7 +37,8 @@ class Shop {
     this.storefront_api_token = storefront_api_token;
     this.success_page_config = success_page_config;
     this.cart_page_config = cart_page_config;
-    this.mono_token = mono_token
+    this.mono_token = mono_token;
+    this.mono_checkout_token = mono_checkout_token;
   }
 
   static async create(shopData) {
@@ -119,7 +120,7 @@ class Shop {
     });
   }
 
-  static async updateConfig(id, success_page_config, cart_page_config, mono_token ) {
+  static async updateConfig(id, success_page_config, cart_page_config, mono_token, mono_checkout_token) {
     return new Promise((resolve, reject) => {
       let query = 'UPDATE shops SET';
       const params = [];
@@ -138,6 +139,11 @@ class Shop {
       if (mono_token !== undefined) {
         query += ` mono_token = $${++paramsNumber},`;
         params.push(mono_token);
+      }
+
+      if (mono_checkout_token !== undefined) {
+        query += ` mono_checkout_token = $${++paramsNumber},`;
+        params.push(mono_checkout_token);
       }
       
       // Удаляем последнюю запятую
