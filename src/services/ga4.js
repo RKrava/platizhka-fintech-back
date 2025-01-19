@@ -33,4 +33,4 @@ async function sendGA4Conversion(client_id, transactionId, value, items) {
     }
 }
 
-module.exports = sendGA4Conversion;
+module.exports = { sendGA4Conversion };
