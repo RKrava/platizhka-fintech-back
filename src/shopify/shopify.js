@@ -323,9 +323,46 @@ Errors: ${JSON.stringify(draftOrderData.body.data.draftOrderCreate.userErrors)}`
 
     const completeOrderData = await completeDraftOrder(draftOrderData.body.data.draftOrderCreate.draftOrder.id,
         pendingPayment, storeId, shopData)
+    
+    // After order is completed, update the customer's marketing preferences
+    if (completeOrderData.body.data.draftOrderComplete.draftOrder.order.id) {
+        const orderId = completeOrderData.body.data.draftOrderComplete.draftOrder.order.id.split('/').pop();
+        try {
+            await axios.get(
+                `https://${shopData.hostName}/admin/api/2024-10/orders/${orderId}.json`,
+                {
+                    headers: {
+                        "X-Shopify-Access-Token": shopData.adminApiAccessToken,
+                        "Content-Type": "application/json"
+                    }
+                }
+            ).then(async (response) => {
+                const customerId = response.data.order.customer.id;
+                if (customerId) {
+                    await axios.put(
+                        `https://${shopData.hostName}/admin/api/2024-10/customers/${customerId}.json`,
+                        {
+                            customer: {
+                                id: customerId,
+                                accepts_marketing: customerData.acceptsMarketing
+                            }
+                        },
+                        {
+                            headers: {
+                                "X-Shopify-Access-Token": shopData.adminApiAccessToken,
+                                "Content-Type": "application/json"
+                            }
+                        }
+                    );
+                }
+            });
+        } catch (error) {
+            console.error('Error updating customer marketing preferences:', error);
+        }
+    }
+
     const clearCartResponse = await clearCart(cartId, cartLineIdArray, storeId, shopData)
-    console.log(JSON.stringify(clearCartResponse))
-    console.log(JSON.stringify(cartId))
+  
 
     return completeOrderData.body.data;
 }
