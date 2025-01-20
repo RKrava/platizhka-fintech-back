@@ -110,6 +110,10 @@ router.post('/payment', async (req, res) => {
                 paymentData.mainClientInfo.email = `${emailParts[0]}@gmail.com`;
             }
         }
+
+        if (!paymentData.mainClientInfo.email) {
+            paymentData.mainClientInfo.email = 'noemail@gmail.com'
+        }
         
         const note = 'Адрес доставки: ' + paymentData.delivery_branch_address + '\n' + 
             (paymentData.mainClientInfo.first_name !== paymentData.deliveryRecipientInfo.first_name || 
