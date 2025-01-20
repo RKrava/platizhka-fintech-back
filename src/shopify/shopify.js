@@ -338,14 +338,15 @@ Errors: ${JSON.stringify(draftOrderData.body.data.draftOrderCreate.userErrors)}`
                 }
             ).then(async (response) => {
                 const customerId = response.data.order.customer.id;
-                console.log(customerId)
                 if (customerId) {
-                    const updateCustomerResponse = await axios.put(
+                    await axios.put(
                         `https://${shopData.hostName}/admin/api/2024-10/customers/${customerId}.json`,
                         {
                             customer: {
                                 id: customerId,
-                                accepts_marketing: true
+                                accepts_marketing: true,
+                                accepts_marketing_updated_at: new Date().toISOString(),
+                                marketing_opt_in_level: "SINGLE_OPT_IN"
                             }
                         },
                         {
@@ -355,7 +356,6 @@ Errors: ${JSON.stringify(draftOrderData.body.data.draftOrderCreate.userErrors)}`
                             }
                         }
                     );
-                    console.log(updateCustomerResponse)
                 }
             });
         } catch (error) {
@@ -363,7 +363,7 @@ Errors: ${JSON.stringify(draftOrderData.body.data.draftOrderCreate.userErrors)}`
         }
     }
 
-    const clearCartResponse = await clearCart(cartId, cartLineIdArray, storeId, shopData)
+    await clearCart(cartId, cartLineIdArray, storeId, shopData)
   
 
     return completeOrderData.body.data;

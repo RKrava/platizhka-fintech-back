@@ -70,7 +70,7 @@ router.get('/create/order', async (req, res) => {
         await new Invoice({id: response.data.result.order_id, status: false, storeid: storeId }).save()
         await new GATrackingData({id: response.data.result.order_id, gclid: gclid, clientId: clientId, cartDataGA4: JSON.stringify(cartData)}).save()
 
-        res.json(response.data.result);
+        res.json({...response.data.result, cartData: cartData});
     } catch (error) {
         console.error('Shopify request error:', error);
         res.status(500).json({ error: 'Shopify API error' });
