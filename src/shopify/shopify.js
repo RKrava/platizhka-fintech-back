@@ -159,6 +159,7 @@ const createDraftOrder = async (customerData, checkoutData, storeId, shopData) =
             "note": customerData.note,
             "phone": customerData.phone,
             "email": customerData.email,
+            "acceptsMarketing": true,
             customAttributes: [
                 { key: "Recipient Name", value: customerData.firstName + ' ' + customerData.lastName },
                 { key: "Recipient Phone", value: customerData.phone },
