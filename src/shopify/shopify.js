@@ -338,13 +338,14 @@ Errors: ${JSON.stringify(draftOrderData.body.data.draftOrderCreate.userErrors)}`
                 }
             ).then(async (response) => {
                 const customerId = response.data.order.customer.id;
+                console.log(customerId)
                 if (customerId) {
-                    await axios.put(
+                    const updateCustomerResponse = await axios.put(
                         `https://${shopData.hostName}/admin/api/2024-10/customers/${customerId}.json`,
                         {
                             customer: {
                                 id: customerId,
-                                accepts_marketing: customerData.acceptsMarketing
+                                accepts_marketing: true
                             }
                         },
                         {
@@ -354,6 +355,7 @@ Errors: ${JSON.stringify(draftOrderData.body.data.draftOrderCreate.userErrors)}`
                             }
                         }
                     );
+                    console.log(updateCustomerResponse)
                 }
             });
         } catch (error) {
