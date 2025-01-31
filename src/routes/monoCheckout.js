@@ -177,7 +177,7 @@ router.post('/payment', async (req, res) => {
                         });
                     });
 
-                    if (gaTrackingData.client_id) {
+                    /* if (gaTrackingData.client_id) {
                         console.log('Sending GA4 Conversion:', {
                             clientId: gaTrackingData.client_id,
                             transactionId: paymentData.orderId,
@@ -186,7 +186,7 @@ router.post('/payment', async (req, res) => {
                         });
 
                         await sendGA4Conversion(gaTrackingData.client_id, paymentData.orderId, value, items);
-                    }
+                    } */
                 } catch (error) {
                     console.error('Ошибка обработки cartDataGA4 для GA4:', error);
                 }
