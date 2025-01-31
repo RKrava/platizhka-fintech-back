@@ -81,7 +81,7 @@ router.post('/payment', async (req, res) => {
 
     // Проверяем, что IP-адрес отправителя разрешен 
     if (!allowedIps.includes(clientIp)) {
-        console.warn(`Запрос от неразрешенного IP-адреса: ${clientIp}`);
+        console.warn(`Запрос от неразрешенного IP-адреса: ${clientIp} `);
         return res.status(403).json({ message: 'Доступ запрещен' });
     }
 
