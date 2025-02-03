@@ -1,21 +1,26 @@
 const axios = require('axios');
 
-async function sendGA4Conversion(client_id, transactionId, value, items) {
+async function sendGA4Conversion(client_id, transactionId, value, items, gclid) {
     const payload = {
-        client_id: client_id, // Извлечённый из `_ga`
+        client_id, // то же самое, что client_id: client_id
+        user_properties: {
+          // Передаём gclid в user_properties (важно для атрибуции Google Ads)
+          gclid: { value: gclid },
+        },
         events: [
-            {
-                name: 'purchase',
-                params: {
-                    transaction_id: transactionId, // ID транзакции
-                    value: value, // Сумма покупки
-                    currency: "UAH", // Валюта
-                    items: items, // Массив товаров,
-                    debug_mode: true
-                },
+          {
+            name: 'purchase',
+            params: {
+              transaction_id: transactionId,
+              value: value,
+              currency: "UAH",
+              items: items,
+
             },
+          },
         ],
-    };
+      };
+
 
     try {
         const response = await axios.post(

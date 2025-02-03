@@ -226,9 +226,9 @@ router.post('/payment/mono', async (req, res) => {
                             items,
                         });
 
-                        await sendGA4Conversion(gaTrackingData.client_id, paymentData.invoiceId, value, items);
+                        await sendGA4Conversion(gaTrackingData.client_id, paymentData.invoiceId, value, items,gaTrackingData.gclid);
                     } else {
-                        console.warn('GCLID отсутствует, пропуск отправки в GA4');
+                        console.warn('Client ID отсутствует, пропуск отправки в GA4');
                     }
                 } catch (error) {
                     console.error('Ошибка обработки cartDataGA4 для GA4:', error);
