@@ -184,7 +184,7 @@ router.post('/payment', async (req, res) => {
                     });
 
                     if (gaTrackingData.client_id) {
-                        console.log('Sending GA4 Conversion:', {
+                        console.log('Sending GA4 Conversion: ', {
                             clientId: gaTrackingData.client_id,
                             transactionId: paymentData.invoiceId,
                             value,
