@@ -161,6 +161,8 @@ router.post('/payment', async (req, res) => {
                     const items = [];
                     const value = Math.round(cartDataGA4.estimatedCost.totalAmount.amount);
 
+                    let hasConstructor = false
+                    
                     cartDataGA4.lines.edges.forEach((edge) => {
                         const product = edge.node.merchandise.product;
                         const variant = edge.node.merchandise;
@@ -168,6 +170,10 @@ router.post('/payment', async (req, res) => {
                         const productId = product.id.split('/').pop();
                         const variantId = variant.id.split('/').pop();
                         const customId = `shopify_UA_${productId}_${variantId}`;
+
+                        if (product.handle === 'counstructor-odyagu') {
+                            hasConstructor = true
+                          }
 
                         items.push({
                             item_id: customId,

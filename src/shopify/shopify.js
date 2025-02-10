@@ -325,9 +325,6 @@ Errors: ${JSON.stringify(draftOrderData.body.data.draftOrderCreate.userErrors)}`
     
     // After order is completed, update the customer's marketing preferences
     if (completeOrderData.body.data.draftOrderComplete.draftOrder.order.id) {
-      if (Number(storeId) === 1) {
-        sendTelegramMessage(`Нове замовлення: ${completeOrderData.body.data.draftOrderComplete.draftOrder.order.id}`, '-1002431256352');
-      }
       const orderId = completeOrderData.body.data.draftOrderComplete.draftOrder.order.id.split('/').pop();
       try {
           await axios.get(
@@ -339,6 +336,14 @@ Errors: ${JSON.stringify(draftOrderData.body.data.draftOrderCreate.userErrors)}`
                   }
               }
           ).then(async (response) => {
+              const order = response.data.order;
+              const lineItems = order.line_items;
+              const itemNames = lineItems.map(item => item.name || item.title).join(', ');
+
+              if (Number(storeId) === 1) {
+                sendTelegramMessage(`Нове замовлення: ${itemNames}`, '-1002431256352');
+              }
+
               const customerId = response.data.order.customer.id;
               if (customerId) {
                   await axios.put(
