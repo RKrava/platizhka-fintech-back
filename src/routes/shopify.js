@@ -105,12 +105,12 @@ router.post('/payment', async (req, res) => {
 
     try {
         const shop = await Shop.findById(storeId);
-
+        
         const response = await axios.post('https://api.monobank.ua/api/merchant/invoice/create', invoiceData, {
             headers: {
                 'Content-Type': 'application/json',
                 'Cache-Control' : 'no-cache',
-                'X-Token': shop.mono_checkout_token
+                'X-Token': shop.mono_checkout_token ? shop.mono_checkout_token : shop.mono_token
             },
         });
 
