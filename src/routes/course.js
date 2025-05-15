@@ -116,10 +116,10 @@ router.post('/payment/mono', async (req, res) => {
       try {
           const userId = paymentData.reference;
 
-          db.query(
+          await db.query(
             `UPDATE course_users SET buy = true WHERE id = $1`,
             [userId],
-          )
+          );
 
           return res.status(200).json({ message: 'User updated'});
       } catch (error) {
