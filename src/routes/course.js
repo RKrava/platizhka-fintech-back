@@ -5,6 +5,13 @@ const db = require('../config/db');
 const router = express.Router();
 router.use(express.json());
 
+const allowedIps = [
+  '35.158.201.27',
+  '52.58.160.42',
+  '35.158.31.50',
+  '35.158.251.173'
+];
+
 // Generate unique code for Telegram bot access
 const generateTelegramCode = () => {
   const characters = 'abcdefghijklmnopqrstuvwxyz0123456789';
