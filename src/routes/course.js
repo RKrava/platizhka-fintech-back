@@ -60,7 +60,7 @@ router.post('/payment', async (req, res) => {
       amount: 9900,
       ccy: 980, // Код валюты (гривна)
       merchantPaymInfo: {
-          reference: userId, // шифрованный reference
+          reference: userId.toString(), // шифрованный reference
           destination: "Покупка курсу",
           basketOrder, // данные корзины
       },
