@@ -83,7 +83,7 @@ router.post('/payment', async (req, res) => {
           headers: {
               'Content-Type': 'application/json',
               'Cache-Control' : 'no-cache',
-              'X-Token': 'm9f3883uSnJfCfDTLrZADFA'
+              'X-Token': 'mFohYtxdYoQe91HE6nY13nA'
           },
       });
 
