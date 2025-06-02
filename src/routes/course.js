@@ -24,7 +24,7 @@ const generateTelegramCode = () => {
 
 
 router.post('/payment', async (req, res) => {
-  const { phone, email } = req.body;
+  const { phone, email, version } = req.body;
 
   if (!phone || !email) {
       return res.status(400).json({ message: 'All fields are required' });
@@ -51,7 +51,7 @@ router.post('/payment', async (req, res) => {
     {
       name: 'Курс "Твій магазин одягу"',
       qty: 1,
-      sum: 9900,
+      sum: version === '1' ? 9900 : 39900,
       icon: 'https://printera-course.vercel.app/logo.png',
       unit: "шт.",
       code: "d21da1c47f3c45fca10a10c32518bdeb",
@@ -64,7 +64,7 @@ router.post('/payment', async (req, res) => {
   ]
 
   const invoiceData = {
-      amount: 9900,
+      amount: version === '1' ? 9900 : 39900,
       ccy: 980, // Код валюты (гривна)
       merchantPaymInfo: {
           reference: userId.toString(), // шифрованный reference
