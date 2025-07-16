@@ -19,6 +19,8 @@ router.post('/payment', async (req, res) => {
       return res.status(400).json({ message: 'All fields are required' });
   }
 
+  // Округляем totalPrice до целого числа копеек
+  const amountInKopecks = Math.round(totalPrice * 100);
 
   const redirectUrl = `https://localhost:8080/order/${orderId}/success`;
 
@@ -26,7 +28,7 @@ router.post('/payment', async (req, res) => {
     {
       name: 'Послуги друку',
       qty: 1,
-      sum: totalPrice * 100,
+      sum: amountInKopecks,
       icon: 'https://printera-course.vercel.app/logo.png',
       unit: "шт.",
       code: "d21da1c47f3c45fca10a10c32518bdeb",
@@ -39,7 +41,7 @@ router.post('/payment', async (req, res) => {
   ]
 
   const invoiceData = {
-      amount: totalPrice * 100,
+      amount: amountInKopecks,
       ccy: 980, // Код валюты (гривна)
       merchantPaymInfo: {
           reference: orderId.toString(), // шифрованный reference
