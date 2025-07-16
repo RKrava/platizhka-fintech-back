@@ -11,6 +11,7 @@ const shopifyRoutes = require("./src/routes/shopify");
 const analyticsRoutes = require("./src/routes/analytics");
 const monoCheckoutRoutes = require("./src/routes/monoCheckout");
 const courseRoutes = require("./src/routes/course");
+const printerRoutes = require("./src/routes/printer");
 const app = express();
 
 app.use(cors());
@@ -24,6 +25,7 @@ app.use('/shopify', shopifyRoutes);
 app.use('/analytics', analyticsRoutes);
 app.use('/mono', monoCheckoutRoutes);
 app.use('/course', courseRoutes);
+app.use('/printer', printerRoutes);
 
 // Создаем HTTP сервер
 const server = http.createServer(app);
