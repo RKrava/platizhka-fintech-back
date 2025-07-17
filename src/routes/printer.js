@@ -22,7 +22,7 @@ router.post('/payment', async (req, res) => {
   // Округляем totalPrice до целого числа копеек
   const amountInKopecks = Math.round(totalPrice * 100);
 
-  const redirectUrl = `https://localhost:8080/order/${orderId}/success`;
+  const redirectUrl = `https://dtf-druk.kiev.ua/order/${orderId}/success`;
 
   const basketOrder = [
     {
@@ -94,7 +94,7 @@ router.post('/payment/mono', async (req, res) => {
           const orderId = paymentData.reference;
 
           await db.query(
-            `UPDATE orders SET status = 'confirmed' WHERE id = $1`,
+            `UPDATE orders_printer SET status = 'confirmed' WHERE id = $1`,
             [orderId],
           );
 
