@@ -29,7 +29,7 @@ router.post('/payment', async (req, res) => {
       name: 'Послуги друку',
       qty: 1,
       sum: amountInKopecks,
-      icon: 'https://printera-course.vercel.app/logo.png',
+      icon: 'https://www.dtf-druk.kiev.ua/logo.png',
       unit: "шт.",
       code: "d21da1c47f3c45fca10a10c32518bdeb",
       barcode: "string",
