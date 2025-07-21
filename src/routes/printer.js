@@ -12,6 +12,25 @@ const allowedIps = [
   '35.158.251.173'
 ];
 
+const sendTelegramMessage = async (message, chatId) => {
+    try {
+        const BOT_TOKEN = '8103636832:AAF0pVsL0kwVXx1FJEm1AVvWbTsle-6GChM';
+        
+        if (!BOT_TOKEN || !chatId) {
+            console.error('Telegram credentials not configured');
+            return;
+        }
+
+        await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+            chat_id: chatId,
+            text: message,
+            parse_mode: 'HTML'
+        });
+    } catch (error) {
+        console.error('Error sending telegram message:', error);
+    }
+};
+
 router.post('/payment', async (req, res) => {
   const { orderId, totalPrice } = req.body;
 
@@ -96,6 +115,11 @@ router.post('/payment/mono', async (req, res) => {
           await db.query(
             `UPDATE orders_printer SET status = 'confirmed' WHERE id = $1`,
             [orderId],
+          );
+
+          await sendTelegramMessage(
+            `Створенно замовлення №${orderId} \n Посилання на замовлення: https://www.dtf-druk.kiev.ua/order/${orderId}/success`,
+            '-4950444234'
           );
 
           return res.status(200).json({ message: 'Order confirmed'});
