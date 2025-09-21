@@ -1,6 +1,6 @@
 const express = require('express');
 const axios = require("axios");
-const {getCartShopify, createOrder} = require("../shopify/shopify");
+const {getCartShopify, createOrder, getOrderNumber} = require("../shopify/shopify");
 const Shop = require("../models/Shop");
 const Invoice = require("../models/Invoice");
 const { sendGA4Conversion } = require('../services/ga4');
@@ -190,7 +190,7 @@ IP: ${clientIp}`;
 
             const byMono = await InvoiceConnector.findByMonoId(paymentData.orderId);
             const orderId_last = createOrderResponse?.draftOrderComplete?.draftOrder?.order?.id?.split('/').pop() || '0';
-            const orderId = await getOrderNumber("gid://shopify/Order/" + orderId_last, storeId, shopData);
+            const orderId = await getOrderNumber("gid://shopify/Order/" + orderId_last, invoice.storeid, shopData);
             await byMono.addShopifyOrderId(orderId);
             
             
@@ -274,7 +274,7 @@ Error: ${paymentData.generalStatus}`;
         }
     } catch (error) {
         const errorMessage = `❌ Server payment error:
-Store ID: ${invoice?.storeid || 'N/A'}
+Store ID: ${req.body?.orderId ? 'N/A' : 'N/A'}
 Cart ID: ${paymentData?.basket_id || 'N/A'} 
 Amount: ${cartDataGA4?.estimatedCost?.totalAmount?.amount ? Math.round(parseFloat(cartDataGA4.estimatedCost.totalAmount.amount)) : 'N/A'}
 Products: ${cartDataGA4?.lines?.edges ? JSON.stringify(cartDataGA4.lines.edges) : 'N/A'}
