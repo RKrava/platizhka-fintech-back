@@ -526,9 +526,7 @@ const getOrderNumber = async (orderId, storeId, shopData) => {
         const query = `query GetOrderNumber($orderId: ID!) {
             order(id: $orderId) {
                 id
-                number
                 name
-                createdAt
             }
         }`;
         
@@ -541,9 +539,9 @@ const getOrderNumber = async (orderId, storeId, shopData) => {
             }
         });
         
-        return response.body.data.order.number;
+        return response.body.data.order.name;
     } catch (error) {
-        console.error('Error getting order number:', error);
+        console.error('Error getting order number:', error.response.data);
         return 0;
     }
 }
