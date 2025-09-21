@@ -87,8 +87,8 @@ router.get('/create/order', async (req, res) => {
         const errorMessage = `❌ Mono Checkout Error:
 Store ID: ${req.query.storeId || 'N/A'}
 Cart ID: ${req.query.cartid || 'N/A'}
-Amount: ${cartData?.estimatedCost?.totalAmount?.amount ? Math.round(parseFloat(cartData.estimatedCost.totalAmount.amount)) : 'N/A'}
-Products: ${newCartItems ? JSON.stringify(newCartItems) : 'N/A'}
+Amount: N/A
+Products: N/A
 Error: ${error.message}`;
         await sendTelegramMessage(errorMessage, '567427708');
         console.error('Shopify request error: ', error);
