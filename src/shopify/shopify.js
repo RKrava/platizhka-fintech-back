@@ -518,4 +518,34 @@ const initialConfig = async (shopData) => {
     });
 }
 
-module.exports = { getCartShopify, createOrder, initialConfig, sendTelegramMessage };
+const getOrderNumber = async (orderId, storeId, shopData) => {
+    try {
+        const shopifyApi = await getShopifyApi(storeId, shopData)
+        const client = new shopifyApi.clients.Graphql({session: await getShopifySession(storeId, shopData)});
+        
+        const query = `query GetOrderNumber($orderId: ID!) {
+            order(id: $orderId) {
+                id
+                number
+                name
+                createdAt
+            }
+        }`;
+        
+        const response = await client.query({
+            data: {
+                query,
+                variables: {
+                    orderId: orderId
+                }
+            }
+        });
+        
+        return response.body.data.order.number;
+    } catch (error) {
+        console.error('Error getting order number:', error);
+        return 0;
+    }
+}
+
+module.exports = { getCartShopify, createOrder, initialConfig, sendTelegramMessage, getOrderNumber };

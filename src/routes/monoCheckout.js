@@ -189,8 +189,10 @@ IP: ${clientIp}`;
             }
 
             const byMono = await InvoiceConnector.findByMonoId(paymentData.orderId);
-            const orderId = createOrderResponse?.draftOrderComplete?.draftOrder?.order?.id?.split('/').pop() || '0';
+            const orderId_last = createOrderResponse?.draftOrderComplete?.draftOrder?.order?.id?.split('/').pop() || '0';
+            const orderId = await getOrderNumber("gid://shopify/Order/" + orderId_last, storeId, shopData);
             await byMono.addShopifyOrderId(orderId);
+            
             
             console.log('Create Order Response:', JSON.stringify(createOrderResponse, null, 2));
             
