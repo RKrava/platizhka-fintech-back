@@ -8,19 +8,62 @@ class InvoiceConnector {
         this.order_shopify_id = order_shopify_id;
     }
 
+    // Альтернативный метод создания с использованием базы данных для генерации UUID
+    async createWithDbUuid() {
+        return new Promise((resolve, reject) => {
+            db.query(
+                `INSERT INTO invoice_connectors (id, mono_id, order_shopify_id) 
+                 VALUES (gen_random_uuid(), $1, $2) RETURNING id`,
+                [null, null],
+                (err, result) => {
+                    if (err) {
+                        console.error('Database insert error with gen_random_uuid:', err);
+                        reject(err);
+                        return;
+                    }
+                    const newId = result.rows[0].id;
+                    this.id = newId;
+                    this.mono_id = null;
+                    this.order_shopify_id = null;
+                    console.log(`Successfully created with DB UUID: ${newId}`);
+                    resolve(this);
+                }
+            );
+        });
+    }
+
     // Создать новый рядок с уникальным UUID
     async create() {
         return new Promise(async (resolve, reject) => {
+            try {
+                // Проверяем подключение к базе данных
+                await new Promise((resolveTest, rejectTest) => {
+                    db.query('SELECT 1', (err, result) => {
+                        if (err) {
+                            console.error('Database connection test failed:', err);
+                            rejectTest(err);
+                            return;
+                        }
+                        resolveTest(result);
+                    });
+                });
+            } catch (error) {
+                reject(new Error(`Ошибка подключения к базе данных: ${error.message}`));
+                return;
+            }
+
             let attempts = 0;
             const maxAttempts = 5;
             
             while (attempts < maxAttempts) {
                 try {
                     const newId = uuidv4();
+                    console.log(`Attempt ${attempts + 1}: Generated UUID: ${newId}`);
                     
                     // Проверяем, что UUID не занят
-                    const existing = await this.findById(newId);
+                    const existing = await InvoiceConnector.findById(newId);
                     if (existing) {
+                        console.log(`UUID ${newId} already exists, trying again...`);
                         attempts++;
                         continue;
                     }
@@ -32,7 +75,12 @@ class InvoiceConnector {
                              VALUES ($1, $2, $3)`,
                             [newId, null, null],
                             function (err, result) {
-                                if (err) rejectInsert(err);
+                                if (err) {
+                                    console.error('Database insert error:', err);
+                                    rejectInsert(err);
+                                    return;
+                                }
+                                console.log(`Successfully inserted UUID: ${newId}`);
                                 resolveInsert(result);
                             }
                         );
@@ -45,9 +93,10 @@ class InvoiceConnector {
                     return;
                     
                 } catch (error) {
+                    console.error(`Attempt ${attempts + 1} failed:`, error);
                     attempts++;
                     if (attempts >= maxAttempts) {
-                        reject(new Error('Не удалось создать уникальный UUID после нескольких попыток'));
+                        reject(new Error(`Не удалось создать уникальный UUID после ${maxAttempts} попыток. Последняя ошибка: ${error.message}`));
                         return;
                     }
                 }
@@ -108,6 +157,7 @@ class InvoiceConnector {
         return new Promise((resolve, reject) => {
             db.query('SELECT * FROM invoice_connectors WHERE id = $1', [id], (err, result) => {
                 if (err) {
+                    console.error('Database query error in findById:', err);
                     reject(err);
                     return;
                 }

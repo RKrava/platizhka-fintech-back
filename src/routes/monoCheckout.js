@@ -46,7 +46,17 @@ router.get('/create/order', async (req, res) => {
 
         // Создать новый коннектор
         const connector = new InvoiceConnector({});
-        await connector.create();
+        try {
+            await connector.create();
+        } catch (error) {
+            console.log('Primary create method failed, trying alternative method:', error.message);
+            try {
+                await connector.createWithDbUuid();
+            } catch (altError) {
+                console.error('Both create methods failed:', altError);
+                throw altError;
+            }
+        }
         
         // Получаем значения из коннектора
         console.log('Созданный коннектор:');
