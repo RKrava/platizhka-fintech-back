@@ -316,7 +316,7 @@ Country: ${customerData.address.country}
 checkoutData: ${JSON.stringify(checkoutData)}
 note: ${customerData.note}
 Errors: ${JSON.stringify(draftOrderData.body.data.draftOrderCreate.userErrors)}`;
-        await sendTelegramMessage(errorMessage, '-4630491937');
+        await sendTelegramMessage(errorMessage, '-567427708');
         return { userErrors: draftOrderData.body.data.draftOrderCreate.userErrors }
     }
 
@@ -518,4 +518,4 @@ const initialConfig = async (shopData) => {
     });
 }
 
-module.exports = { getCartShopify, createOrder, initialConfig };
+module.exports = { getCartShopify, createOrder, initialConfig, sendTelegramMessage };

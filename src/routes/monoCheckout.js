@@ -5,7 +5,8 @@ const Shop = require("../models/Shop");
 const Invoice = require("../models/Invoice");
 const { sendGA4Conversion } = require('../services/ga4');
 const GATrackingData = require("../models/GATrackingData");
-
+const InvoiceConnector = require('../models/InvoiceConnector');
+const { sendTelegramMessage } = require('../shopify/shopify'); // Добавляем импорт
 const router = express.Router();
 router.use(express.json());
 
@@ -42,6 +43,16 @@ router.get('/create/order', async (req, res) => {
 
         paymentMethodList.push("card");
 
+
+        // Создать новый коннектор
+        const connector = new InvoiceConnector({});
+        await connector.create();
+        
+        // Получаем значения из коннектора
+        console.log('Созданный коннектор:');
+        console.log('ID:', connector.id);
+        
+
         const requestData = {
             order_ref: cartid + "_" + Date.now(),
             amount: Math.round(parseFloat(cartData.estimatedCost.totalAmount.amount)),
@@ -55,7 +66,7 @@ router.get('/create/order', async (req, res) => {
             payment_method_list: paymentMethodList,
             dlv_pay_merchant: null,
             callback_url: "https://platizhka-back.vercel.app/mono/payment",
-            return_url: redirectUrl
+            return_url: redirectUrl + "?connector_id=" + connector.id.toString()
         }
 
 
@@ -68,9 +79,18 @@ router.get('/create/order', async (req, res) => {
         });
 
         await new Invoice({id: response.data.result.order_id, status: false, storeid: storeId }).save()
+
+        await connector.addMonoId(response.data.result.order_id);  //связываем внутренний UUID с UUID от Monobank
         await new GATrackingData({id: response.data.result.order_id, gclid: gclid, clientId: clientId, cartDataGA4: JSON.stringify(cartData)}).save()
         res.json({...response.data.result, cartData: cartData});
     } catch (error) {
+        const errorMessage = `❌ Mono Checkout Error:
+Store ID: ${req.query.storeId || 'N/A'}
+Cart ID: ${req.query.cartid || 'N/A'}
+Amount: ${cartData?.estimatedCost?.totalAmount?.amount ? Math.round(parseFloat(cartData.estimatedCost.totalAmount.amount)) : 'N/A'}
+Products: ${newCartItems ? JSON.stringify(newCartItems) : 'N/A'}
+Error: ${error.message}`;
+        await sendTelegramMessage(errorMessage, '567427708');
         console.error('Shopify request error: ', error);
         res.status(500).json({ error: 'Shopify API error' });
     }
@@ -82,6 +102,9 @@ router.post('/payment', async (req, res) => {
     // Проверяем, что IP-адрес отправителя разрешен 
     if (!allowedIps.includes(clientIp)) {
         console.warn(`Запрос от неразрешенного IP-адреса: ${clientIp} `);
+        const errorMessage = `⚠️ Unauthorized IP Access Attempt:
+IP: ${clientIp}`;
+        await sendTelegramMessage(errorMessage, '567427708');
         return res.status(403).json({ message: 'Доступ запрещен ' });
     }
 
@@ -92,6 +115,7 @@ router.post('/payment', async (req, res) => {
     try {
         const invoice = await Invoice.findById(paymentData.orderId);
         if (!invoice) {
+            await sendTelegramMessage(`❌ Invoice not found: ${paymentData.orderId}`, '567427708');
             return res.status(404).json({ message: 'Invoice not found' });
         }
 
@@ -119,6 +143,7 @@ router.post('/payment', async (req, res) => {
              paymentData.mainClientInfo.last_name !== paymentData.deliveryRecipientInfo.last_name ||
              paymentData.mainClientInfo.phoneNumber !== paymentData.deliveryRecipientInfo.phoneNumber ? 
              'Основной клиент: ' + paymentData.mainClientInfo.first_name + ' ' + paymentData.mainClientInfo.last_name + ' ' + paymentData.mainClientInfo.phoneNumber + '\n' : '') +
+            'Перезвонить клиенту: ' + (paymentData.clientCallback ? 'нужно' : 'не нужно') + '\n' +
             'Комментарий: ' + paymentData.comment;
 
         // Формируем данные для заказа
@@ -152,6 +177,28 @@ router.post('/payment', async (req, res) => {
             } else {
                 createOrderResponse = await createOrder(paymentData.basket_id.split('_')[0], customerData, false, invoice.storeid, shopData)
             }
+
+            const byMono = await InvoiceConnector.findByMonoId(paymentData.orderId);
+            const orderId = createOrderResponse?.draftOrderComplete?.draftOrder?.order?.id?.split('/').pop() || '0';
+            await byMono.addShopifyOrderId(orderId);
+            
+            console.log('Create Order Response:', JSON.stringify(createOrderResponse, null, 2));
+            
+            try {
+                const orderMessage = `✅ Новый заказ создан:
+ID заказа: ${createOrderResponse?.draftOrderComplete?.draftOrder?.order?.id || 'N/A'}
+Статус: ${paymentData.generalStatus}
+Сумма: ${Math.round(cartDataGA4?.estimatedCost?.totalAmount?.amount || 0)}
+Способ оплаты: ${customerData.payment}
+
+Полный ответ:
+${JSON.stringify(createOrderResponse, null, 2)}`;
+
+                await sendTelegramMessage(orderMessage, '567427708');
+            } catch (error) {
+                console.error('Ошибка при отправке уведомления в Telegram:', error);
+            }
+
 
             await invoice.changeStatus();
 
@@ -202,11 +249,53 @@ router.post('/payment', async (req, res) => {
 
             return res.status(200).json({ message: 'Order created', data: createOrderResponse });
         } else {
+            const errorMessage = `❌ Payment declined:
+Store ID: ${invoice?.storeid || 'N/A'}
+Payment Status: ${paymentData?.generalStatus || 'Unknown'}
+Payment Code: ${paymentData?.statusCode || 'N/A'} 
+Payment Description: ${paymentData?.statusMessage || 'No description'}
+Payment Reference: ${paymentData?.reference || 'N/A'}
+Cart ID: ${paymentData.basket_id}
+Error: ${paymentData.generalStatus}`;
+            await sendTelegramMessage(errorMessage, '567427708');
             return res.status(400).json({ message: 'Payment declined' });
         }
     } catch (error) {
+        const errorMessage = `❌ Server payment error:
+Store ID: ${invoice?.storeid || 'N/A'}
+Cart ID: ${paymentData?.basket_id || 'N/A'} 
+Amount: ${cartDataGA4?.estimatedCost?.totalAmount?.amount ? Math.round(parseFloat(cartDataGA4.estimatedCost.totalAmount.amount)) : 'N/A'}
+Products: ${cartDataGA4?.lines?.edges ? JSON.stringify(cartDataGA4.lines.edges) : 'N/A'}
+Error: ${error?.message || 'Неизвестная ошибка'}`;
+        await sendTelegramMessage(errorMessage, '567427708');
         console.error('Ошибка при обработке платежа:', error);
         return res.status(500).json({ message: 'Payment processing error', error: error.message });
+    }
+});
+
+// Эндпоинт для получения данных коннектора по ID
+router.get('/connector/status', async (req, res) => {
+    const { connectorId } = req.query;
+    try {
+        const connectorData = await InvoiceConnector.getConnectorData(connectorId);
+        if (!connectorData) {
+            res.json({ 
+                found: false,
+                message: 'Connector not found' 
+            });
+            return;
+        }
+
+        res.json({
+            found: true,
+            connector_id: connectorData.id,
+            mono_id: connectorData.mono_id,
+            order_shopify_id: connectorData.order_shopify_id
+        });
+
+    } catch (error) {
+        console.error('Connector status error: ', error);
+        res.status(500).json({ error: 'Database error' });
     }
 });
 
