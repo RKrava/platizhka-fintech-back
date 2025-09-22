@@ -320,4 +320,55 @@ router.get('/connector/status', async (req, res) => {
     }
 });
 
+// Эндпоинт для получения информации о заказе из Monobank
+router.post('/order', async (req, res) => {
+    try {
+        const { order_ref, storeId } = req.body;
+
+        if (!order_ref) {
+            return res.status(400).json({ error: 'order_ref is required' });
+        }
+
+        if (!storeId) {
+            return res.status(400).json({ error: 'storeId is required' });
+        }
+
+        const shop = await Shop.findById(storeId);
+        if (!shop) {
+            return res.status(404).json({ error: 'Shop not found' });
+        }
+
+        if (!shop.mono_checkout_token) {
+            return res.status(400).json({ error: 'Monobank token not configured for this shop' });
+        }
+
+        const response = await axios.get(`https://api.monobank.ua/personal/checkout/order/${order_ref}`, {
+            headers: {
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-cache',
+                'X-Token': shop.mono_checkout_token,
+            },
+        });
+
+        res.json(response.data);
+
+    } catch (error) {
+        console.error('Get order info error:', {
+            error: error.message,
+            statusCode: error.response?.status,
+            statusText: error.response?.statusText,
+            responseData: error.response?.data,
+            orderRef: req.body.order_ref,
+            storeId: req.body.storeId,
+            stack: error.stack
+        });
+
+        if (error.response?.status === 404) {
+            return res.status(404).json({ error: 'Order not found' });
+        }
+
+        res.status(500).json({ error: 'Failed to get order info' });
+    }
+});
+
 module.exports = router;
