@@ -63,7 +63,7 @@ router.get('/create/order', async (req, res) => {
         console.log('ID:', connector.id);
         
         const randomStr = Math.random().toString(36).substring(2, 8);
-        const orderRef = + + "br" + Date.now() + "" + randomStr;
+        const orderRef ="br" + Date.now() + "" + randomStr;
         const requestData = {    
             order_ref: orderRef,
             amount: Math.round(parseFloat(cartData.estimatedCost.totalAmount.amount)),
@@ -347,9 +347,9 @@ router.post('/order', async (req, res) => {
             return res.status(400).json({ error: 'Monobank token not configured for this shop' });
         }
 
-        const connector = await InvoiceConnector.findByOrderRef(order_ref);
+        const connector = await InvoiceConnector.findByMonoId(order_ref);
         if (!connector) {
-            return res.status(404).json({ error: 'Connector not found' });
+            return res.status(410).json({ error: 'Connector not found' });
         }
         const order_ref_true = connector.orderRef;
 
