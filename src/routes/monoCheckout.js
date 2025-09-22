@@ -100,8 +100,17 @@ Cart ID: ${req.query.cartid || 'N/A'}
 Amount: N/A
 Products: N/A
 Error: ${error.message}`;
-        await sendTelegramMessage(errorMessage, '567427708');
-        console.error('Shopify request error: ', error);
+        await sendTelegramMessage(`${errorMessage}\nStack: ${error.stack}\nResponse: ${JSON.stringify(error.response?.data)}\nRequest: ${JSON.stringify(error.config)}`, '567427708');
+        console.error('Shopify request error:', {
+            error: error.message,
+            statusCode: error.response?.status,
+            statusText: error.response?.statusText,
+            responseData: error.response?.data,
+            requestData: error.config?.data,
+            requestUrl: error.config?.url,
+            requestMethod: error.config?.method,
+            stack: error.stack
+        });
         res.status(500).json({ error: 'Shopify API error' });
     }
 });
