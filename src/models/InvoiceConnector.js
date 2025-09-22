@@ -13,7 +13,7 @@ class InvoiceConnector {
     async createWithDbUuid() {
         return new Promise((resolve, reject) => {
             db.query(
-                `INSERT INTO invoice_connectors (id, mono_id, order_shopify_id, orderRef) 
+                `INSERT INTO invoice_connectors (id, mono_id, order_shopify_id, "orderRef") 
                  VALUES (gen_random_uuid(), $1, $2, $3) RETURNING id`,
                 [null, null, null],
                 (err, result) => {
@@ -73,7 +73,7 @@ class InvoiceConnector {
                     // Вставляем новый рядок без mono_id, order_shopify_id и orderRef
                     const result = await new Promise((resolveInsert, rejectInsert) => {
                         db.query(
-                            `INSERT INTO invoice_connectors (id, mono_id, order_shopify_id, orderRef) 
+                            `INSERT INTO invoice_connectors (id, mono_id, order_shopify_id, "orderRef") 
                              VALUES ($1, $2, $3, $4)`,
                             [newId, null, null, null],
                             function (err, result) {
@@ -160,8 +160,8 @@ class InvoiceConnector {
         return new Promise((resolve, reject) => {
             db.query(
                 `UPDATE invoice_connectors 
-                 SET orderRef = $1 
-                 WHERE id = $2 AND orderRef IS NULL`,
+                 SET "orderRef" = $1 
+                 WHERE id = $2 AND "orderRef" IS NULL`,
                 [orderRef, this.id],
                 function (err, result) {
                     if (err) {
@@ -237,7 +237,7 @@ class InvoiceConnector {
     // Поиск по orderRef
     static async findByOrderRef(orderRef) {
         return new Promise((resolve, reject) => {
-            db.query('SELECT * FROM invoice_connectors WHERE orderRef = $1', [orderRef], (err, result) => {
+            db.query('SELECT * FROM invoice_connectors WHERE "orderRef" = $1', [orderRef], (err, result) => {
                 if (err) {
                     reject(err);
                     return;
@@ -287,7 +287,7 @@ class InvoiceConnector {
     static async getConnectorData(connectorId) {
         return new Promise((resolve, reject) => {
             db.query(
-                'SELECT id, mono_id, order_shopify_id, orderRef FROM invoice_connectors WHERE id = $1',
+                'SELECT id, mono_id, order_shopify_id, "orderRef" FROM invoice_connectors WHERE id = $1',
                 [connectorId],
                 function (err, result) {
                     if (err) {
