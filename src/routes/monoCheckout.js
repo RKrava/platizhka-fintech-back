@@ -62,9 +62,9 @@ router.get('/create/order', async (req, res) => {
         console.log('Созданный коннектор:');
         console.log('ID:', connector.id);
         
-
-        const requestData = {
-            order_ref: cartid + "_" + Date.now(),
+        const orderRef = cartid + "_" + Date.now();
+        const requestData = {    
+            order_ref: orderRef,
             amount: Math.round(parseFloat(cartData.estimatedCost.totalAmount.amount)),
             ccy: 980,
             count: cartData.lines.edges.reduce((acc, edge) => acc + edge.node.quantity, 0),
@@ -91,6 +91,8 @@ router.get('/create/order', async (req, res) => {
         await new Invoice({id: response.data.result.order_id, status: false, storeid: storeId }).save()
 
         await connector.addMonoId(response.data.result.order_id);  //связываем внутренний UUID с UUID от Monobank
+        await connector.addOrderRef(orderRef);  //добавляем orderRef к коннектору
+
         await new GATrackingData({id: response.data.result.order_id, gclid: gclid, clientId: clientId, cartDataGA4: JSON.stringify(cartData)}).save()
         res.json({...response.data.result, cartData: cartData});
     } catch (error) {
@@ -311,7 +313,8 @@ router.get('/connector/status', async (req, res) => {
             found: true,
             connector_id: connectorData.id,
             mono_id: connectorData.mono_id,
-            order_shopify_id: connectorData.order_shopify_id
+            order_shopify_id: connectorData.order_shopify_id,
+            orderRef: connectorData.orderRef
         });
 
     } catch (error) {
@@ -342,7 +345,13 @@ router.post('/order', async (req, res) => {
             return res.status(400).json({ error: 'Monobank token not configured for this shop' });
         }
 
-        const response = await axios.get(`https://api.monobank.ua/personal/checkout/order/${order_ref}`, {
+        const connector = await InvoiceConnector.findByOrderRef(order_ref);
+        if (!connector) {
+            return res.status(404).json({ error: 'Connector not found' });
+        }
+        const order_ref_true = connector.orderRef;
+
+        const response = await axios.get(`https://api.monobank.ua/personal/checkout/order/${order_ref_true}`, {
             headers: {
                 'Content-Type': 'application/json',
                 'Cache-Control': 'no-cache',

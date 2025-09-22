@@ -2,19 +2,20 @@ const db = require('../config/db');
 const { v4: uuidv4 } = require('uuid');
 
 class InvoiceConnector {
-    constructor({ id, mono_id, order_shopify_id }) {
+    constructor({ id, mono_id, order_shopify_id, orderRef }) {
         this.id = id;
         this.mono_id = mono_id;
         this.order_shopify_id = order_shopify_id;
+        this.orderRef = orderRef;
     }
 
     // Альтернативный метод создания с использованием базы данных для генерации UUID
     async createWithDbUuid() {
         return new Promise((resolve, reject) => {
             db.query(
-                `INSERT INTO invoice_connectors (id, mono_id, order_shopify_id) 
-                 VALUES (gen_random_uuid(), $1, $2) RETURNING id`,
-                [null, null],
+                `INSERT INTO invoice_connectors (id, mono_id, order_shopify_id, orderRef) 
+                 VALUES (gen_random_uuid(), $1, $2, $3) RETURNING id`,
+                [null, null, null],
                 (err, result) => {
                     if (err) {
                         console.error('Database insert error with gen_random_uuid:', err);
@@ -25,6 +26,7 @@ class InvoiceConnector {
                     this.id = newId;
                     this.mono_id = null;
                     this.order_shopify_id = null;
+                    this.orderRef = null;
                     console.log(`Successfully created with DB UUID: ${newId}`);
                     resolve(this);
                 }
@@ -68,12 +70,12 @@ class InvoiceConnector {
                         continue;
                     }
                     
-                    // Вставляем новый рядок без mono_id и order_shopify_id
+                    // Вставляем новый рядок без mono_id, order_shopify_id и orderRef
                     const result = await new Promise((resolveInsert, rejectInsert) => {
                         db.query(
-                            `INSERT INTO invoice_connectors (id, mono_id, order_shopify_id) 
-                             VALUES ($1, $2, $3)`,
-                            [newId, null, null],
+                            `INSERT INTO invoice_connectors (id, mono_id, order_shopify_id, orderRef) 
+                             VALUES ($1, $2, $3, $4)`,
+                            [newId, null, null, null],
                             function (err, result) {
                                 if (err) {
                                     console.error('Database insert error:', err);
@@ -89,6 +91,7 @@ class InvoiceConnector {
                     this.id = newId;
                     this.mono_id = null;
                     this.order_shopify_id = null;
+                    this.orderRef = null;
                     resolve(this);
                     return;
                     
@@ -152,6 +155,30 @@ class InvoiceConnector {
         });
     }
 
+    // Добавить orderRef к существующему ряду
+    async addOrderRef(orderRef) {
+        return new Promise((resolve, reject) => {
+            db.query(
+                `UPDATE invoice_connectors 
+                 SET orderRef = $1 
+                 WHERE id = $2 AND orderRef IS NULL`,
+                [orderRef, this.id],
+                function (err, result) {
+                    if (err) {
+                        reject(err);
+                        return;
+                    }
+                    if (result.rowCount === 0) {
+                        reject(new Error('Рядок не найден или уже имеет orderRef'));
+                        return;
+                    }
+                    this.orderRef = orderRef;
+                    resolve(this);
+                }.bind(this)
+            );
+        });
+    }
+
     // Поиск по обычному UUID
     static async findById(id) {
         return new Promise((resolve, reject) => {
@@ -207,6 +234,24 @@ class InvoiceConnector {
         });
     }
 
+    // Поиск по orderRef
+    static async findByOrderRef(orderRef) {
+        return new Promise((resolve, reject) => {
+            db.query('SELECT * FROM invoice_connectors WHERE orderRef = $1', [orderRef], (err, result) => {
+                if (err) {
+                    reject(err);
+                    return;
+                }
+                const row = result?.rows[0];
+                if (row) {
+                    resolve(new InvoiceConnector(row));
+                } else {
+                    resolve(null);
+                }
+            });
+        });
+    }
+
     // Получить все неиспользованные коннекторы (без mono_id)
     static async getUnusedConnectors() {
         return new Promise((resolve, reject) => {
@@ -238,11 +283,11 @@ class InvoiceConnector {
         });
     }
 
-    // Получить данные коннектора по ID (mono_id и order_shopify_id)
+    // Получить данные коннектора по ID (mono_id, order_shopify_id и orderRef)
     static async getConnectorData(connectorId) {
         return new Promise((resolve, reject) => {
             db.query(
-                'SELECT id, mono_id, order_shopify_id FROM invoice_connectors WHERE id = $1',
+                'SELECT id, mono_id, order_shopify_id, orderRef FROM invoice_connectors WHERE id = $1',
                 [connectorId],
                 function (err, result) {
                     if (err) {
@@ -254,7 +299,8 @@ class InvoiceConnector {
                         resolve({
                             id: row.id,
                             mono_id: row.mono_id,
-                            order_shopify_id: row.order_shopify_id
+                            order_shopify_id: row.order_shopify_id,
+                            orderRef: row.orderRef
                         });
                     } else {
                         resolve(null);
