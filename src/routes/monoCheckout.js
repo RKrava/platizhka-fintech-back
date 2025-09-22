@@ -63,7 +63,7 @@ router.get('/create/order', async (req, res) => {
         console.log('ID:', connector.id);
         
         const randomStr = Math.random().toString(36).substring(2, 8);
-        const orderRef = cartid + "_" + Date.now();
+        const orderRef = cartid.replace('?key=', 'kkeyk') + "_" + Date.now();
         const requestData = {    
             order_ref: orderRef,
             amount: Math.round(parseFloat(cartData.estimatedCost.totalAmount.amount)),
@@ -196,9 +196,9 @@ IP: ${clientIp}`;
             let createOrderResponse;
             if (paymentData.payment_method === 'payment_on_delivery') {
                 customerData.payment = 'Накладений платіж'
-                createOrderResponse = await createOrder(paymentData.basket_id.split('_')[0], customerData, true, invoice.storeid, shopData)
+                createOrderResponse = await createOrder((paymentData.basket_id.split('_')[0]).replace('kkeyk', '?key='), customerData, true, invoice.storeid, shopData)
             } else {
-                createOrderResponse = await createOrder(paymentData.basket_id.split('_')[0], customerData, false, invoice.storeid, shopData)
+                createOrderResponse = await createOrder((paymentData.basket_id.split('_')[0]).replace('kkeyk', '?key='), customerData, false, invoice.storeid, shopData)
             }
 
             const byMono = await InvoiceConnector.findByMonoId(paymentData.orderId);
