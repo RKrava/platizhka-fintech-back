@@ -62,7 +62,8 @@ router.get('/create/order', async (req, res) => {
         console.log('Созданный коннектор:');
         console.log('ID:', connector.id);
         
-        const orderRef = cartid + "_" + Date.now();
+        const randomStr = Math.random().toString(36).substring(2, 8);
+        const orderRef = + + "br" + Date.now() + "" + randomStr;
         const requestData = {    
             order_ref: orderRef,
             amount: Math.round(parseFloat(cartData.estimatedCost.totalAmount.amount)),
@@ -78,6 +79,7 @@ router.get('/create/order', async (req, res) => {
             callback_url: "https://platizhka-back.vercel.app/mono/payment",
             return_url: redirectUrl + "?connector_id=" + connector.id.toString()
         }
+        console.log('Request Data:', requestData);
 
 
         const response = await axios.post('https://api.monobank.ua/personal/checkout/order', requestData, {
