@@ -63,7 +63,7 @@ router.get('/create/order', async (req, res) => {
         console.log('ID:', connector.id);
         
         const randomStr = Math.random().toString(36).substring(2, 8);
-        const orderRef ="br" + Date.now() + "" + randomStr;
+        const orderRef = cartid + "_" + Date.now();
         const requestData = {    
             order_ref: orderRef,
             amount: Math.round(parseFloat(cartData.estimatedCost.totalAmount.amount)),
