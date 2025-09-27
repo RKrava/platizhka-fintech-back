@@ -209,21 +209,7 @@ IP: ${clientIp}`;
             
             console.log('Create Order Response:', JSON.stringify(createOrderResponse, null, 2));
             
-            try {
-                const orderMessage = `✅ Новый заказ создан:
-ID заказа: ${createOrderResponse?.draftOrderComplete?.draftOrder?.order?.id || 'N/A'}
-Статус: ${paymentData.generalStatus}
-Сумма: ${Math.round(cartDataGA4?.estimatedCost?.totalAmount?.amount || 0)}
-Способ оплаты: ${customerData.payment}
-
-Полный ответ:
-${JSON.stringify(createOrderResponse, null, 2)}`;
-
-                await sendTelegramMessage(orderMessage, '567427708');
-            } catch (error) {
-                console.error('Ошибка при отправке уведомления в Telegram:', error);
-            }
-
+    
 
             await invoice.changeStatus();
 
