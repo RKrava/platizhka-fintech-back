@@ -27,13 +27,28 @@ router.get('/create/order', async (req, res) => {
             adminApiAccessToken: shop.admin_api_token
         };
         const cartData = (await getCartShopify(cartid, storeId, shopData)).data.cart;
-        const newCartItems = cartData.lines.edges.map((edge) => ({
-            code_product: edge.node.merchandise.id,
-            name: edge.node.merchandise.product.title + " - " + (edge.node.merchandise.title === "Default Title" || edge.node.merchandise.title === "mczr_price_1490" ? "" : edge.node.merchandise.title),
-            price: edge.node.attributes.find((attr) => attr.key === '_mczr_price') ? parseFloat(edge.node.attributes.find((attr) => attr.key === '_mczr_price').value) : parseFloat(edge.node.merchandise.price.amount),
-            cnt: edge.node.quantity,
-            product_img_src: edge.node.attributes.find((attr) => attr.key === '_mczr_image') ? edge.node.attributes.find((attr) => attr.key === '_mczr_image').value : edge.node.merchandise.product.images.edges[0]?.node.url || '/default-image.jpg'
-        }));
+        const newCartItems = cartData.lines.edges.map((edge) => {
+            // Формируем базовое название товара
+            let productName = edge.node.merchandise.product.title;
+            
+            // Добавляем вариант товара, если это не "Default Title" или "mczr_price_1490"
+            if (edge.node.merchandise.title !== "Default Title" && edge.node.merchandise.title !== "mczr_price_1490") {
+                productName += " - " + edge.node.merchandise.title;
+            }
+            
+            // Убираем тире и все что после него, если тире есть
+            if (productName.includes(" - ")) {
+                productName = productName.split(" - ")[0];
+            }
+            
+            return {
+                code_product: edge.node.merchandise.id,
+                name: productName,
+                price: edge.node.attributes.find((attr) => attr.key === '_mczr_price') ? parseFloat(edge.node.attributes.find((attr) => attr.key === '_mczr_price').value) : parseFloat(edge.node.merchandise.price.amount),
+                cnt: edge.node.quantity,
+                product_img_src: edge.node.attributes.find((attr) => attr.key === '_mczr_image') ? edge.node.attributes.find((attr) => attr.key === '_mczr_image').value : edge.node.merchandise.product.images.edges[0]?.node.url || '/default-image.jpg'
+            };
+        });
 
         let paymentMethodList = [];
         
