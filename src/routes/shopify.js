@@ -71,6 +71,20 @@ router.post('/payment', async (req, res) => {
         uktzed: "string",
     }));
 
+    // Создать новый коннектор перед формированием reference
+    const connector = new InvoiceConnector({});
+    try {
+        await connector.create();
+    } catch (error) {
+        console.log('Primary create method failed, trying alternative method:', error.message);
+        try {
+            await connector.createWithDbUuid();
+        } catch (altError) {
+            console.error('Both create methods failed:', altError);
+            throw altError;
+        }
+    }
+
     // Шифруем reference (в простом виде через Base64)
     const reference = Buffer.from(JSON.stringify({
         cartToken,
@@ -82,6 +96,7 @@ router.post('/payment', async (req, res) => {
         warehouse: formData.warehouse,
         city: formData.city,
         store_id: Number(storeId),
+        connectorId: connector.id.toString(), // Сохраняем connectorId в reference
         // gclid: formData.gclid, //_gcl_aw
         // clientId: formData.clientId, //client_id
         // cartDataGA4: formData.cartData //cartData
@@ -107,20 +122,6 @@ router.post('/payment', async (req, res) => {
     try {
         const shop = await Shop.findById(storeId);
         
-        // Создать новый коннектор
-        const connector = new InvoiceConnector({});
-        try {
-            await connector.create();
-        } catch (error) {
-            console.log('Primary create method failed, trying alternative method:', error.message);
-            try {
-                await connector.createWithDbUuid();
-            } catch (altError) {
-                console.error('Both create methods failed:', altError);
-                throw altError;
-            }
-        }
-        
         const response = await axios.post('https://api.monobank.ua/api/merchant/invoice/create', invoiceData, {
             headers: {
                 'Content-Type': 'application/json',
@@ -131,7 +132,8 @@ router.post('/payment', async (req, res) => {
 
         await new Invoice({id: response.data.invoiceId, status: false, storeid: storeId }).save()
 
-        await connector.addMonoId(response.data.invoiceId);  //связываем внутренний UUID с UUID от Monobank
+        // Не используем addMonoId для старого API, так как invoiceId не является UUID
+        // connectorId уже сохранен в reference и будет использован в webhook
 
         await new GATrackingData({id: response.data.invoiceId, gclid: formData.gclid, clientId: formData.clientId, cartDataGA4: JSON.stringify(formData.cartData)}).save()
 
@@ -205,11 +207,25 @@ router.post('/payment/mono', async (req, res) => {
                 shopData
             );
 
-            const byMono = await InvoiceConnector.findByMonoId(paymentData.invoiceId);
-            if (byMono && createOrderResponse?.draftOrderComplete?.draftOrder?.order?.id) {
+            // Ищем коннектор по connectorId из reference (для старого API)
+            // или по mono_id (для нового API, если бы использовался)
+            let connector = null;
+            if (decodedReference.connectorId) {
+                connector = await InvoiceConnector.findById(decodedReference.connectorId);
+            } else {
+                // Fallback: пытаемся найти по mono_id (для совместимости)
+                try {
+                    connector = await InvoiceConnector.findByMonoId(paymentData.invoiceId);
+                } catch (error) {
+                    // Игнорируем ошибку, если invoiceId не UUID
+                    console.log('Could not find connector by mono_id (invoiceId is not UUID):', paymentData.invoiceId);
+                }
+            }
+
+            if (connector && createOrderResponse?.draftOrderComplete?.draftOrder?.order?.id) {
                 const orderId_last = createOrderResponse.draftOrderComplete.draftOrder.order.id.split('/').pop();
                 const orderId = await getOrderNumber("gid://shopify/Order/" + orderId_last, storeId, shopData);
-                await byMono.addShopifyOrderId(orderId.replace('#', ''));
+                await connector.addShopifyOrderId(orderId.replace('#', ''));
             }
 
             await invoice.changeStatus()
