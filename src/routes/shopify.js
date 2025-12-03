@@ -1,10 +1,11 @@
 const express = require('express');
 const axios = require("axios");
-const {getCartShopify, createOrder} = require("../shopify/shopify");
+const {getCartShopify, createOrder, getOrderNumber} = require("../shopify/shopify");
 const Shop = require("../models/Shop");
 const Invoice = require("../models/Invoice");
 const { sendGA4Conversion } = require('../services/ga4');
 const GATrackingData = require("../models/GATrackingData");
+const InvoiceConnector = require('../models/InvoiceConnector');
 const router = express.Router();
 
 // Добавьте эту строку перед определением маршрутов
@@ -106,6 +107,20 @@ router.post('/payment', async (req, res) => {
     try {
         const shop = await Shop.findById(storeId);
         
+        // Создать новый коннектор
+        const connector = new InvoiceConnector({});
+        try {
+            await connector.create();
+        } catch (error) {
+            console.log('Primary create method failed, trying alternative method:', error.message);
+            try {
+                await connector.createWithDbUuid();
+            } catch (altError) {
+                console.error('Both create methods failed:', altError);
+                throw altError;
+            }
+        }
+        
         const response = await axios.post('https://api.monobank.ua/api/merchant/invoice/create', invoiceData, {
             headers: {
                 'Content-Type': 'application/json',
@@ -116,12 +131,15 @@ router.post('/payment', async (req, res) => {
 
         await new Invoice({id: response.data.invoiceId, status: false, storeid: storeId }).save()
 
+        await connector.addMonoId(response.data.invoiceId);  //связываем внутренний UUID с UUID от Monobank
+
         await new GATrackingData({id: response.data.invoiceId, gclid: formData.gclid, clientId: formData.clientId, cartDataGA4: JSON.stringify(formData.cartData)}).save()
 
         res.json({
             success: true,
             invoiceId: response.data.invoiceId,
             pageUrl: response.data?.pageUrl,
+            connectorId: connector.id.toString()
         });
     } catch (error) {
         console.error('Ошибка при создании инвойса:', error);
@@ -186,6 +204,13 @@ router.post('/payment/mono', async (req, res) => {
                 storeId,
                 shopData
             );
+
+            const byMono = await InvoiceConnector.findByMonoId(paymentData.invoiceId);
+            if (byMono && createOrderResponse?.draftOrderComplete?.draftOrder?.order?.id) {
+                const orderId_last = createOrderResponse.draftOrderComplete.draftOrder.order.id.split('/').pop();
+                const orderId = await getOrderNumber("gid://shopify/Order/" + orderId_last, storeId, shopData);
+                await byMono.addShopifyOrderId(orderId.replace('#', ''));
+            }
 
             await invoice.changeStatus()
 
