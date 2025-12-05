@@ -121,7 +121,7 @@ router.post('/payment', async (req, res) => {
             destination: "Cплата за товар",
             basketOrder, // данные корзины
         },
-        redirectUrl, // URL для перенаправления
+        redirectUrl: (redirectUrl + "?connector_id=" + connector.id.toString()), // URL для перенаправления
         webHookUrl: `https://platizhka-back.vercel.app/shopify/payment/mono`, // Webhook URL
         validity: 3600, // Время действия инвойса 
         paymentType: "debit",
