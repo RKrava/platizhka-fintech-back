@@ -56,20 +56,25 @@ router.post('/order/create', async (req, res) => {
 router.post('/payment', async (req, res) => {
     const { cartToken, formData, cartData, storeId, redirectUrl } = req.body;
 
-    // Формируем объект basketOrder на основе данных cartData
-    const basketOrder = cartData.map(item => ({
-        name: item.title,
-        qty: item.count,
-        sum: item.price * 100,
-        icon: item.image,
-        unit: "шт.",
-        code: "d21da1c47f3c45fca10a10c32518bdeb",
-        barcode: "string",
-        header: "string",
-        footer: "string",
-        tax: [],
-        uktzed: "string",
-    }));
+    // Формируем объект basketOrder на основе данных cartData, модифицируя названия если нужно
+    const basketOrder = cartData.map(item => {
+        let name = item.title;
+        if (name === "Фігурка за вашими параметрами") {
+            name = "Колекційна фігурка";
+        } else if (name === "Рамка за вашими параметрами") {
+            name = "Декоративна рамка з фігурками";
+        }
+        return {
+            name,
+            qty: item.count,
+            sum: item.price * 100,
+            icon: item.image,
+            unit: "шт.",
+            code: "d21da1c47f3c45fca10a10c32518bdeb",
+            tax: [],
+        };
+    });
+
 
     // Создать новый коннектор перед формированием reference
     const connector = new InvoiceConnector({});
