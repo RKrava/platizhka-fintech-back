@@ -345,18 +345,14 @@ router.get('/order/number', async (req, res) => {
             adminApiAccessToken: shop.admin_api_token
         };
 
-        // Если orderId не содержит префикс gid://shopify/Order/, добавляем его
-        const formattedOrderId = orderId.startsWith('gid://shopify/Order/') 
-            ? orderId 
-            : `gid://shopify/Order/${orderId}`;
-
         console.log('[GET /shopify/order/number] Вызов getOrderNumber с параметрами:', {
-            formattedOrderId,
+            orderId,
             storeId,
             hostName: shopData.hostName
         });
 
-        const orderNumber = await getOrderNumber(formattedOrderId, storeId, shopData);
+        // Передаем orderId как есть - функция getOrderNumber сама определит формат
+        const orderNumber = await getOrderNumber(orderId, storeId, shopData);
         
         console.log('[GET /shopify/order/number] Успешно получен номер заказа:', orderNumber);
         

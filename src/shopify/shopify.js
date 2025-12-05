@@ -522,6 +522,46 @@ const getOrderNumber = async (orderId, storeId, shopData) => {
     try {
         console.log('[getOrderNumber] Начало выполнения:', { orderId, storeId });
         
+        // Проверяем, является ли orderId числовым ID или GID
+        // Если это строка вида "order-xxx" или просто число без префикса, обрабатываем по-другому
+        let formattedOrderId = orderId;
+        
+        // Если это не GID формат, пытаемся извлечь числовой ID
+        if (!orderId.startsWith('gid://shopify/Order/')) {
+            // Если это просто число, добавляем префикс GID
+            if (/^\d+$/.test(orderId)) {
+                formattedOrderId = `gid://shopify/Order/${orderId}`;
+                console.log('[getOrderNumber] Преобразован числовой ID в GID:', formattedOrderId);
+            } else {
+                // Если это не числовой ID, возможно это номер заказа (name) - ищем через REST API
+                console.log('[getOrderNumber] Похоже на номер заказа, используем REST API для поиска');
+                try {
+                    // Убираем # если есть
+                    const orderName = orderId.replace('#', '');
+                    const restResponse = await axios.get(
+                        `https://${shopData.hostName}/admin/api/2024-10/orders.json?name=${orderName}&limit=1`,
+                        {
+                            headers: {
+                                "X-Shopify-Access-Token": shopData.adminApiAccessToken,
+                                "Content-Type": "application/json"
+                            }
+                        }
+                    );
+                    
+                    if (restResponse.data.orders && restResponse.data.orders.length > 0) {
+                        const order = restResponse.data.orders[0];
+                        console.log('[getOrderNumber] Заказ найден через REST API:', order.name);
+                        return order.name;
+                    } else {
+                        throw new Error(`Заказ с номером ${orderName} не найден`);
+                    }
+                } catch (restError) {
+                    console.error('[getOrderNumber] Ошибка при поиске через REST API:', restError.message);
+                    throw new Error(`Не удалось найти заказ. Проверьте формат orderId. Ожидается числовой ID (например: 123456789) или GID (gid://shopify/Order/123456789), получено: ${orderId}`);
+                }
+            }
+        }
+        
         const shopifyApi = await getShopifyApi(storeId, shopData)
         const client = new shopifyApi.clients.Graphql({session: await getShopifySession(storeId, shopData)});
         
@@ -532,13 +572,13 @@ const getOrderNumber = async (orderId, storeId, shopData) => {
             }
         }`;
         
-        console.log('[getOrderNumber] Выполнение GraphQL запроса:', { orderId });
+        console.log('[getOrderNumber] Выполнение GraphQL запроса:', { formattedOrderId });
         
         const response = await client.query({
             data: {
                 query,
                 variables: {
-                    orderId: orderId
+                    orderId: formattedOrderId
                 }
             }
         });
@@ -548,8 +588,7 @@ const getOrderNumber = async (orderId, storeId, shopData) => {
             hasData: !!response.body?.data,
             hasOrder: !!response.body?.data?.order,
             responseKeys: Object.keys(response || {}),
-            bodyKeys: response.body ? Object.keys(response.body) : null,
-            fullResponse: JSON.stringify(response, null, 2)
+            bodyKeys: response.body ? Object.keys(response.body) : null
         });
         
         if (!response || !response.body) {
@@ -564,7 +603,7 @@ const getOrderNumber = async (orderId, storeId, shopData) => {
         
         if (!response.body.data.order) {
             console.error('[getOrderNumber] Заказ не найден или ошибка в запросе:', response.body.data);
-            throw new Error('Order not found or query error');
+            throw new Error(`Заказ с ID ${formattedOrderId} не найден. Проверьте правильность ID заказа.`);
         }
         
         const orderName = response.body.data.order.name;
