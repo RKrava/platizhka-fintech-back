@@ -316,6 +316,39 @@ router.get('/payment/status', async (req, res) => {
     }
 });
 
+router.get('/order/number', async (req, res) => {
+    try {
+        const { orderId, storeId } = req.query;
+        
+        if (!orderId || !storeId) {
+            return res.status(400).json({ error: 'orderId и storeId обязательны' });
+        }
+
+        const shop = await Shop.findById(storeId);
+        if (!shop) {
+            return res.status(404).json({ error: 'Магазин не найден' });
+        }
+
+        const shopData = {
+            apiSecretKey: shop.storefront_api_token,
+            hostName: shop.shopify_url,
+            adminApiAccessToken: shop.admin_api_token
+        };
+
+        // Если orderId не содержит префикс gid://shopify/Order/, добавляем его
+        const formattedOrderId = orderId.startsWith('gid://shopify/Order/') 
+            ? orderId 
+            : `gid://shopify/Order/${orderId}`;
+
+        const orderNumber = await getOrderNumber(formattedOrderId, storeId, shopData);
+        
+        res.json({ orderNumber });
+    } catch (error) {
+        console.error('Shopify request error:', error);
+        res.status(500).json({ error: 'Shopify API error', message: error.message });
+    }
+});
+
 
 
 module.exports = router;
