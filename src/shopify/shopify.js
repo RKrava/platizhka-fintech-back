@@ -520,6 +520,8 @@ const initialConfig = async (shopData) => {
 
 const getOrderNumber = async (orderId, storeId, shopData) => {
     try {
+        console.log('[getOrderNumber] Начало выполнения:', { orderId, storeId });
+        
         const shopifyApi = await getShopifyApi(storeId, shopData)
         const client = new shopifyApi.clients.Graphql({session: await getShopifySession(storeId, shopData)});
         
@@ -530,6 +532,8 @@ const getOrderNumber = async (orderId, storeId, shopData) => {
             }
         }`;
         
+        console.log('[getOrderNumber] Выполнение GraphQL запроса:', { orderId });
+        
         const response = await client.query({
             data: {
                 query,
@@ -539,10 +543,47 @@ const getOrderNumber = async (orderId, storeId, shopData) => {
             }
         });
         
-        return response.body.data.order.name;
+        console.log('[getOrderNumber] Получен ответ:', {
+            hasBody: !!response.body,
+            hasData: !!response.body?.data,
+            hasOrder: !!response.body?.data?.order,
+            responseKeys: Object.keys(response || {}),
+            bodyKeys: response.body ? Object.keys(response.body) : null,
+            fullResponse: JSON.stringify(response, null, 2)
+        });
+        
+        if (!response || !response.body) {
+            console.error('[getOrderNumber] Ответ не содержит body:', response);
+            throw new Error('Invalid response structure: missing body');
+        }
+        
+        if (!response.body.data) {
+            console.error('[getOrderNumber] Ответ не содержит data:', response.body);
+            throw new Error('Invalid response structure: missing data');
+        }
+        
+        if (!response.body.data.order) {
+            console.error('[getOrderNumber] Заказ не найден или ошибка в запросе:', response.body.data);
+            throw new Error('Order not found or query error');
+        }
+        
+        const orderName = response.body.data.order.name;
+        console.log('[getOrderNumber] Номер заказа получен:', orderName);
+        
+        return orderName;
     } catch (error) {
-        console.error('Error getting order number:', error.response.data);
-        return 0;
+        console.error('[getOrderNumber] Ошибка при получении номера заказа:', {
+            message: error.message,
+            stack: error.stack,
+            orderId,
+            storeId,
+            errorResponse: error.response ? {
+                status: error.response.status,
+                statusText: error.response.statusText,
+                data: error.response.data
+            } : null
+        });
+        throw error; // Пробрасываем ошибку дальше, чтобы её можно было обработать в роуте
     }
 }
 
