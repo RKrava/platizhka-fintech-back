@@ -320,14 +320,24 @@ router.get('/order/number', async (req, res) => {
     try {
         const { orderId, storeId } = req.query;
         
+        console.log('[GET /shopify/order/number] Запрос получен:', { orderId, storeId });
+        
         if (!orderId || !storeId) {
+            console.error('[GET /shopify/order/number] Отсутствуют обязательные параметры:', { orderId, storeId });
             return res.status(400).json({ error: 'orderId и storeId обязательны' });
         }
 
+        console.log('[GET /shopify/order/number] Поиск магазина по storeId:', storeId);
         const shop = await Shop.findById(storeId);
         if (!shop) {
+            console.error('[GET /shopify/order/number] Магазин не найден для storeId:', storeId);
             return res.status(404).json({ error: 'Магазин не найден' });
         }
+
+        console.log('[GET /shopify/order/number] Магазин найден:', { 
+            shopId: shop._id, 
+            hostName: shop.shopify_url 
+        });
 
         const shopData = {
             apiSecretKey: shop.storefront_api_token,
@@ -340,11 +350,24 @@ router.get('/order/number', async (req, res) => {
             ? orderId 
             : `gid://shopify/Order/${orderId}`;
 
+        console.log('[GET /shopify/order/number] Вызов getOrderNumber с параметрами:', {
+            formattedOrderId,
+            storeId,
+            hostName: shopData.hostName
+        });
+
         const orderNumber = await getOrderNumber(formattedOrderId, storeId, shopData);
+        
+        console.log('[GET /shopify/order/number] Успешно получен номер заказа:', orderNumber);
         
         res.json({ orderNumber });
     } catch (error) {
-        console.error('Shopify request error:', error);
+        console.error('[GET /shopify/order/number] Ошибка:', {
+            message: error.message,
+            stack: error.stack,
+            orderId: req.query.orderId,
+            storeId: req.query.storeId
+        });
         res.status(500).json({ error: 'Shopify API error', message: error.message });
     }
 });
