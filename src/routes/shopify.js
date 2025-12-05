@@ -117,7 +117,7 @@ router.post('/payment', async (req, res) => {
         amount: totalAmount,
         ccy: 980, // Код валюты (гривна)
         merchantPaymInfo: {
-            reference: referenceId, // шифрованный reference
+            reference: referenceId.toString(), // шифрованный reference
             destination: "Cплата за товар",
             basketOrder, // данные корзины
         },
@@ -172,11 +172,11 @@ router.post('/payment/mono', async (req, res) => {
     const paymentData = req.body;
     console.log(paymentData)
 
-    const reference = await Reference.findById(paymentData.reference)
+    const reference = await Reference.findById(Number(paymentData.reference))
     if (!reference) {
         return res.status(400).json({ message: 'Reference not found' });
     }
-    
+
     // Расшифровка reference
     const decodedReference = JSON.parse(Buffer.from(reference.base64, 'base64').toString('utf-8'));
 
