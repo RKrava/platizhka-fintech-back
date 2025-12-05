@@ -6,6 +6,7 @@ const Invoice = require("../models/Invoice");
 const { sendGA4Conversion } = require('../services/ga4');
 const GATrackingData = require("../models/GATrackingData");
 const InvoiceConnector = require('../models/InvoiceConnector');
+const Reference = require('../models/References');
 const router = express.Router();
 
 // Добавьте эту строку перед определением маршрутов
@@ -107,6 +108,8 @@ router.post('/payment', async (req, res) => {
         // cartDataGA4: formData.cartData //cartData
     })).toString('base64');
 
+    const referenceId = await new Reference({ base64: reference }).save()
+
     console.log(cartData)
     const totalAmount = cartData.reduce((acc, item) => acc + (item.price * item.count * 100), 0);
 
@@ -114,8 +117,8 @@ router.post('/payment', async (req, res) => {
         amount: totalAmount,
         ccy: 980, // Код валюты (гривна)
         merchantPaymInfo: {
-            reference, // шифрованный reference
-            destination: "Покупка щастя",
+            reference: referenceId, // шифрованный reference
+            destination: "Cплата за товар",
             basketOrder, // данные корзины
         },
         redirectUrl, // URL для перенаправления
@@ -169,8 +172,13 @@ router.post('/payment/mono', async (req, res) => {
     const paymentData = req.body;
     console.log(paymentData)
 
+    const reference = await Reference.findById(paymentData.reference)
+    if (!reference) {
+        return res.status(400).json({ message: 'Reference not found' });
+    }
+    
     // Расшифровка reference
-    const decodedReference = JSON.parse(Buffer.from(paymentData.reference, 'base64').toString('utf-8'));
+    const decodedReference = JSON.parse(Buffer.from(reference.base64, 'base64').toString('utf-8'));
 
     // if (decodedReference.cartDataGA4) {
     //     console.log('decodedReference cartData', decodedReference.cartDataGA4)
