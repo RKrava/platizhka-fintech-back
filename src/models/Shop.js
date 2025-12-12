@@ -26,7 +26,7 @@ const defaultCartPageConfig = {
 };
 
 class Shop {
-  constructor({ id, user_id, name, description, shopify_url, domain_url, admin_api_token, storefront_api_token, success_page_config, cart_page_config, mono_token, mono_checkout_token }) {
+  constructor({ id, user_id, name, description, shopify_url, domain_url, admin_api_token, storefront_api_token, success_page_config, cart_page_config, mono_token, mono_checkout_token, hutko_merchant_id, hutko_secret_key }) {
     this.id = id;
     this.user_id = user_id;
     this.name = name;
@@ -39,6 +39,8 @@ class Shop {
     this.cart_page_config = cart_page_config;
     this.mono_token = mono_token;
     this.mono_checkout_token = mono_checkout_token;
+    this.hutko_merchant_id = hutko_merchant_id;
+    this.hutko_secret_key = hutko_secret_key;
   }
 
   static async create(shopData) {
@@ -120,7 +122,7 @@ class Shop {
     });
   }
 
-  static async updateConfig(id, success_page_config, cart_page_config, mono_token, mono_checkout_token) {
+  static async updateConfig(id, success_page_config, cart_page_config, mono_token, mono_checkout_token, hutko_merchant_id, hutko_secret_key) {
     return new Promise((resolve, reject) => {
       let query = 'UPDATE shops SET';
       const params = [];
@@ -144,6 +146,16 @@ class Shop {
       if (mono_checkout_token !== undefined) {
         query += ` mono_checkout_token = $${++paramsNumber},`;
         params.push(mono_checkout_token);
+      }
+
+      if (hutko_merchant_id !== undefined) {
+        query += ` hutko_merchant_id = $${++paramsNumber},`;
+        params.push(hutko_merchant_id);
+      }
+
+      if (hutko_secret_key !== undefined) {
+        query += ` hutko_secret_key = $${++paramsNumber},`;
+        params.push(hutko_secret_key);
       }
       
       // Удаляем последнюю запятую

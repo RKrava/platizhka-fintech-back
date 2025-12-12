@@ -1,5 +1,6 @@
 const express = require('express');
 const axios = require("axios");
+const crypto = require('crypto');
 const {getCartShopify, createOrder, getOrderNumber} = require("../shopify/shopify");
 const Shop = require("../models/Shop");
 const Invoice = require("../models/Invoice");
@@ -18,6 +19,21 @@ const allowedIps = [
     '35.158.31.50',
     '35.158.251.173'
 ];
+
+// Функция для генерации подписи Hutko
+// Согласно документации Hutko, подпись генерируется из отсортированных параметров и секретного ключа
+function generateHutkoSignature(params, secretKey) {
+    // Сортируем параметры по ключу
+    const sortedKeys = Object.keys(params).sort();
+    // Формируем строку для подписи
+    const signatureString = sortedKeys
+        .map(key => `${key}=${params[key]}`)
+        .join('&');
+    // Добавляем секретный ключ
+    const fullString = signatureString + secretKey;
+    // Генерируем SHA1 хеш
+    return crypto.createHash('sha1').update(fullString).digest('hex');
+}
 
 // Пример эндпоинта для выполнения GraphQL запроса
 router.get('/cart', async (req, res) => {
@@ -365,6 +381,261 @@ router.get('/order/number', async (req, res) => {
             storeId: req.query.storeId
         });
         res.status(500).json({ error: 'Shopify API error', message: error.message });
+    }
+});
+
+// Эндпоинт для создания заказа в Hutko (аналог /payment для Mono)
+router.post('/payment/hutko', async (req, res) => {
+    const { cartToken, formData, cartData, storeId, redirectUrl } = req.body;
+
+    try {
+        const shop = await Shop.findById(storeId);
+        if (!shop) {
+            return res.status(404).json({ error: 'Shop not found' });
+        }
+
+        // Проверяем наличие необходимых данных для Hutko
+        if (!shop.hutko_merchant_id || !shop.hutko_secret_key) {
+            return res.status(400).json({ error: 'Hutko credentials not configured for this shop' });
+        }
+
+        // Создать новый коннектор перед формированием reference
+        const connector = new InvoiceConnector({});
+        try {
+            await connector.create();
+        } catch (error) {
+            console.log('Primary create method failed, trying alternative method:', error.message);
+            try {
+                await connector.createWithDbUuid();
+            } catch (altError) {
+                console.error('Both create methods failed:', altError);
+                throw altError;
+            }
+        }
+
+        // Шифруем reference (в простом виде через Base64)
+        const reference = Buffer.from(JSON.stringify({
+            cartToken,
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            tel: formData.tel,
+            email: formData.email,
+            comment: formData.comment,
+            warehouse: formData.warehouse,
+            city: formData.city,
+            store_id: Number(storeId),
+            connectorId: connector.id.toString(),
+        })).toString('base64');
+
+        const referenceId = await new Reference({ base64: reference }).save();
+
+        console.log(cartData);
+        const totalAmount = cartData.reduce((acc, item) => acc + (item.price * item.count * 100), 0);
+
+        // Формируем описание заказа
+        const orderDesc = cartData.map(item => `${item.title} x${item.count}`).join(', ');
+
+        // Формируем параметры для запроса
+        // Сохраняем reference_id в merchant_data для использования в callback
+        const merchantData = JSON.stringify({ reference_id: referenceId.toString() });
+        const requestParams = {
+            response_url: (redirectUrl + "?connector_id=" + connector.id.toString()),
+            server_callback_url: `https://platizhka-back.vercel.app/shopify/payment/hutko/callback`,
+            order_id: referenceId,
+            currency: 'UAH',
+            merchant_id: shop.hutko_merchant_id,
+            order_desc: orderDesc.substring(0, 255), // Ограничение длины описания
+            amount: totalAmount,
+            required_rectoken: 'Y',
+            merchant_data: merchantData,
+        };
+
+        // Генерируем подпись
+        const signature = generateHutkoSignature(requestParams, shop.hutko_secret_key);
+        requestParams.signature = signature;
+
+        // Отправляем запрос на создание токена
+        const response = await axios.post('https://pay.hutko.org/api/checkout/token/', {
+            request: requestParams
+        }, {
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        });
+
+        if (response.data.response.response_status === 'failure') {
+            console.error('Hutko API error:', response.data.response);
+            return res.status(400).json({
+                success: false,
+                message: response.data.response.error_message || 'Ошибка при создании заказа',
+                error_code: response.data.response.error_code
+            });
+        }
+
+        const token = response.data.response.token;
+
+        // Сохраняем invoice с order_id как идентификатором
+        await new Invoice({ id: referenceId, status: false, storeid: storeId }).save();
+
+        // Формируем pageUrl с токеном
+        const pageUrl = `https://pay.hutko.org/checkout?token=${token}`;
+
+        res.json({
+            success: true,
+            pageUrl: pageUrl,
+            connectorId: connector.id.toString()
+        });
+    } catch (error) {
+        console.error('Ошибка при создании заказа в Hutko:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Ошибка при создании заказа',
+            error: error.message
+        });
+    }
+});
+
+// Эндпоинт для обработки callback от Hutko (аналог /payment/mono)
+router.post('/payment/hutko/callback', async (req, res) => {
+    const clientIp = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+
+    // Проверяем, что IP-адрес отправителя разрешен
+    // Примечание: возможно, Hutko использует другие IP-адреса, их нужно будет добавить
+    if (!allowedIps.includes(clientIp)) {
+        console.warn(`Запрос от неразрешенного IP-адреса: ${clientIp}`);
+        // Пока не блокируем, так как IP Hutko могут отличаться
+        // return res.status(403).json({ message: 'Доступ запрещен' });
+    }
+
+    const paymentData = req.body;
+    console.log('Hutko callback data:', paymentData);
+
+    try {
+        // В Hutko callback приходит order_id, по которому мы можем найти reference
+        // Но обычно в callback приходит order_id, который мы использовали при создании заказа
+        const orderId = paymentData.order_id;
+        
+        if (!orderId) {
+            return res.status(400).json({ message: 'order_id is required' });
+        }
+
+        const invoice = await Invoice.findById(orderId);
+        if (!invoice) {
+            console.error(`Invoice not found: ${orderId}`);
+            return res.status(404).json({ message: 'Invoice not found' });
+        }
+
+        // Проверяем статус платежа
+        if (paymentData.response_status === 'success' && paymentData.order_status === 'approved') {
+            // Извлекаем reference_id из merchant_data
+            let referenceId = orderId;
+
+            const reference = await Reference.findById(Number(referenceId));
+            if (!reference) {
+                console.error(`Reference not found for reference_id: ${referenceId}`);
+                return res.status(404).json({ message: 'Reference not found' });
+            }
+
+            // Расшифровка reference
+            const decodedReference = JSON.parse(Buffer.from(reference.base64, 'base64').toString('utf-8'));
+
+            const customerData = {
+                firstName: decodedReference.firstName,
+                lastName: decodedReference.lastName,
+                phone: decodedReference.tel,
+                email: decodedReference.email,
+                note: decodedReference.comment,
+                address: {
+                    address1: decodedReference.warehouse,
+                    city: decodedReference.city,
+                    country: 'Ukraine',
+                    zip: '00000'
+                },
+                payment: 'Hutko'
+            };
+
+            const storeId = invoice.storeid;
+            const gaTrackingData = await GATrackingData.findById(orderId);
+            const shop = await Shop.findById(storeId);
+            const shopData = {
+                apiSecretKey: shop.storefront_api_token,
+                hostName: shop.shopify_url,
+                adminApiAccessToken: shop.admin_api_token
+            };
+
+            const createOrderResponse = await createOrder(
+                decodedReference.cartToken,
+                customerData,
+                false,
+                storeId,
+                shopData
+            );
+
+            // Ищем коннектор по connectorId из reference
+            let connector = null;
+            if (decodedReference.connectorId) {
+                connector = await InvoiceConnector.findById(decodedReference.connectorId);
+            }
+
+            if (connector && createOrderResponse?.draftOrderComplete?.draftOrder?.order?.id) {
+                const orderId_last = createOrderResponse.draftOrderComplete.draftOrder.order.id.split('/').pop();
+                const orderId_shopify = await getOrderNumber("gid://shopify/Order/" + orderId_last, storeId, shopData);
+                await connector.addShopifyOrderId(orderId_shopify.replace('#', ''));
+            }
+
+            await invoice.changeStatus();
+
+            const cartDataGA4 = gaTrackingData && gaTrackingData.cart_data_ga4 ? JSON.parse(gaTrackingData.cart_data_ga4) : null;
+            console.log('cartDataGA4', cartDataGA4);
+
+            if (
+                decodedReference.store_id === 1 && cartDataGA4 && cartDataGA4.lines && cartDataGA4.lines.edges && cartDataGA4.lines.edges.length > 0
+            ) {
+                try {
+                    const items = [];
+                    const value = Math.round(cartDataGA4.estimatedCost.totalAmount.amount);
+
+                    cartDataGA4.lines.edges.forEach((edge) => {
+                        const product = edge.node.merchandise.product;
+                        const variant = edge.node.merchandise;
+
+                        const productId = product.id.split('/').pop();
+                        const variantId = variant.id.split('/').pop();
+                        const customId = `shopify_UA_${productId}_${variantId}`;
+
+                        items.push({
+                            item_id: customId,
+                            item_name: product.title,
+                            quantity: edge.node.quantity,
+                            price: parseFloat(variant.price.amount),
+                        });
+                    });
+
+                    if (gaTrackingData && gaTrackingData.client_id) {
+                        console.log('Sending GA4 Conversion:', {
+                            clientId: gaTrackingData.client_id,
+                            transactionId: orderId,
+                            value,
+                            items,
+                        });
+
+                        await sendGA4Conversion(gaTrackingData.client_id, orderId, value, items, gaTrackingData.gclid);
+                    } else {
+                        console.warn('Client ID отсутствует, пропуск отправки в GA4');
+                    }
+                } catch (error) {
+                    console.error('Ошибка обработки cartDataGA4 для GA4:', error);
+                }
+            }
+
+            return res.status(200).json({ message: 'Order created', data: createOrderResponse });
+        } else {
+            console.error('Payment declined:', paymentData);
+            return res.status(400).json({ message: 'Payment declined', data: paymentData });
+        }
+    } catch (error) {
+        console.error('Ошибка при обработке callback от Hutko:', error);
+        return res.status(500).json({ message: 'Callback processing error', error: error.message });
     }
 });
 
