@@ -21,26 +21,54 @@ const allowedIps = [
 ];
 
 // Функция для генерации подписи Hutko
-// Согласно документации Hutko API, подпись генерируется через SHA1
-// Формат: отсортированные параметры в формате "key=value" через "|", затем добавляется секретный ключ
-function generateHutkoSignature(params, secretKey) {
+// Согласно документации Hutko: https://docs.hutko.org/uk/docs/page/3/
+// Алгоритм:
+// 1. Добавить merchant_id в параметры (если его нет)
+// 2. Отфильтровать пустые значения (но не значения "0")
+// 3. Отсортировать по ключам
+// 4. Взять только значения (array_values)
+// 5. Добавить secretKey в начало массива
+// 6. Объединить через "|"
+// 7. SHA1 от получившейся строки
+function generateHutkoSignature(params, secretKey, merchantId) {
     // Исключаем поле signature из расчета подписи
     const paramsForSignature = { ...params };
     delete paramsForSignature.signature;
     
+    // Добавляем merchant_id в параметры (если его нет)
+    if (!paramsForSignature.merchant_id && merchantId) {
+        paramsForSignature.merchant_id = merchantId;
+    }
+    
+    // Отфильтровываем пустые значения (но не "0" и не false)
+    // В PHP array_filter с strlen удаляет пустые строки, null, но не "0"
+    const filteredParams = {};
+    for (const key in paramsForSignature) {
+        const value = paramsForSignature[key];
+        // Сохраняем значение, если оно не пустая строка и не null/undefined
+        // Но сохраняем "0", false, и другие "ложные" значения, которые не являются пустыми строками
+        if (value !== null && value !== undefined && value !== '') {
+            filteredParams[key] = value;
+        } else if (value === 0 || value === '0' || value === false) {
+            // Сохраняем 0, "0", false
+            filteredParams[key] = value;
+        }
+    }
+    
     // Сортируем параметры по ключу
-    const sortedKeys = Object.keys(paramsForSignature).sort();
+    const sortedKeys = Object.keys(filteredParams).sort();
     
-    // Формируем строку для подписи в формате "key1=value1|key2=value2|..."
-    const signatureString = sortedKeys
-        .map(key => `${key}=${paramsForSignature[key]}`)
-        .join('|');
+    // Берем только значения (array_values)
+    const values = sortedKeys.map(key => String(filteredParams[key]));
     
-    // Добавляем секретный ключ в конец строки
-    const fullString = signatureString + '|' + secretKey;
+    // Добавляем secretKey в начало массива (array_unshift)
+    values.unshift(secretKey);
     
-    // Генерируем SHA1 хеш
-    return crypto.createHash('sha1').update(fullString).digest('hex');
+    // Объединяем через "|"
+    const signatureString = values.join('|');
+    
+    // Генерируем SHA1 хеш (не HMAC, а просто SHA1)
+    return crypto.createHash('sha1').update(signatureString).digest('hex').toLowerCase();
 }
 
 // Пример эндпоинта для выполнения GraphQL запроса
@@ -459,7 +487,7 @@ router.post('/payment/hutko', async (req, res) => {
         };
 
         // Генерируем подпись
-        const signature = generateHutkoSignature(requestParams, shop.hutko_secret_key);
+        const signature = generateHutkoSignature(requestParams, shop.hutko_secret_key, shop.hutko_merchant_id);
         requestParams.signature = signature;
 
         // Отправляем запрос на создание токена
