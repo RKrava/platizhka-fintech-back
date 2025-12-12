@@ -499,6 +499,7 @@ router.post('/payment/hutko', async (req, res) => {
             },
         });
 
+        console.log('Hutko API response:', response.data.response);
         if (response.data.response.response_status === 'failure') {
             console.error('Hutko API error:', response.data.response);
             return res.status(400).json({
@@ -514,10 +515,11 @@ router.post('/payment/hutko', async (req, res) => {
         await new Invoice({ id: referenceId, status: false, storeid: storeId }).save();
 
         // Формируем pageUrl с токеном
-        const pageUrl = `https://pay.hutko.org/checkout?token=${token}`;
+        const pageUrl = `https://pay.hutko.org/merchants/ce3dc7675b723b76d2abdaab35e9c6ecb77f3662/default/index.html?token=${token}`;
 
         res.json({
             success: true,
+            invoiceId: referenceId,
             pageUrl: pageUrl,
             connectorId: connector.id.toString()
         });
