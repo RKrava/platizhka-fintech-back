@@ -8,6 +8,7 @@
     "build": "webpack --mode=production index.js -o build/index.js"
   },
   "dependencies": {
+    "@hutko/js-sdk": "^2.0.5",
     "@shopify/shopify-api": "^11.3.0",
     "@shopify/storefront-api-client": "^1.0.1",
     "axios": "^1.7.7",
@@ -18,8 +19,8 @@
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.13.0",
     "sqlite3": "^5.1.7",
-    "ws": "^8.18.0",
     "webpack": "^5.94.0",
-    "webpack-cli": "^5.1.4"
+    "webpack-cli": "^5.1.4",
+    "ws": "^8.18.0"
   }
 }

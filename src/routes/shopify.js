@@ -21,16 +21,24 @@ const allowedIps = [
 ];
 
 // Функция для генерации подписи Hutko
-// Согласно документации Hutko, подпись генерируется из отсортированных параметров и секретного ключа
+// Согласно документации Hutko API, подпись генерируется через SHA1
+// Формат: отсортированные параметры в формате "key=value" через "|", затем добавляется секретный ключ
 function generateHutkoSignature(params, secretKey) {
+    // Исключаем поле signature из расчета подписи
+    const paramsForSignature = { ...params };
+    delete paramsForSignature.signature;
+    
     // Сортируем параметры по ключу
-    const sortedKeys = Object.keys(params).sort();
-    // Формируем строку для подписи
+    const sortedKeys = Object.keys(paramsForSignature).sort();
+    
+    // Формируем строку для подписи в формате "key1=value1|key2=value2|..."
     const signatureString = sortedKeys
-        .map(key => `${key}=${params[key]}`)
-        .join('&');
-    // Добавляем секретный ключ
-    const fullString = signatureString + secretKey;
+        .map(key => `${key}=${paramsForSignature[key]}`)
+        .join('|');
+    
+    // Добавляем секретный ключ в конец строки
+    const fullString = signatureString + '|' + secretKey;
+    
     // Генерируем SHA1 хеш
     return crypto.createHash('sha1').update(fullString).digest('hex');
 }
