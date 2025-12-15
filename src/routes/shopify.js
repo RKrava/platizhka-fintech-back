@@ -483,7 +483,6 @@ router.post('/payment/hutko', async (req, res) => {
             merchant_id: shop.hutko_merchant_id,
             order_desc: orderDesc.substring(0, 255), // Ограничение длины описания
             amount: totalAmount,
-            required_rectoken: 'Y',
             merchant_data: merchantData,
         };
 
