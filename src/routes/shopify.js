@@ -475,6 +475,7 @@ router.post('/payment/hutko', async (req, res) => {
         // Сохраняем reference_id в merchant_data для использования в callback
         const merchantData = JSON.stringify({ reference_id: referenceId.toString() });
         const requestParams = {
+            sender_email: formData.email,
             response_url: (redirectUrl + "?connector_id=" + connector.id.toString()),
             server_callback_url: `https://platizhka-back.vercel.app/shopify/payment/hutko/callback`,
             order_id: referenceId,
