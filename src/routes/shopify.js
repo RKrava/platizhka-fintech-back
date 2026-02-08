@@ -1,7 +1,7 @@
 const express = require('express');
 const axios = require("axios");
 const crypto = require('crypto');
-const {getCartShopify, createOrder, getOrderNumber} = require("../shopify/shopify");
+const {getCartShopify, createOrder, getOrderNumber, sendTelegramMessage} = require("../shopify/shopify");
 const Shop = require("../models/Shop");
 const Invoice = require("../models/Invoice");
 const { sendGA4Conversion } = require('../services/ga4');
@@ -257,6 +257,12 @@ router.post('/payment/mono', async (req, res) => {
             console.log('MONOBANK INVOICEID:' + paymentData.invoiceId)
             const invoice = await Invoice.findById(paymentData.invoiceId)
             const storeId = !invoice ? decodedReference.store_id : invoice.storeid
+
+            // Idempotency check: если invoice уже обработан, не создаём повторный заказ
+            if (invoice && invoice.status === true) {
+                console.log(`Invoice ${paymentData.invoiceId} already processed, skipping order creation`);
+                return res.status(200).json({ message: 'Already processed' });
+            }
             const gaTrackingData = await GATrackingData.findById(paymentData.invoiceId)
             const shop = await Shop.findById(storeId);
             const shopData = {
@@ -344,6 +350,23 @@ router.post('/payment/mono', async (req, res) => {
             return res.status(200).json({ message: 'Order created', data: createOrderResponse });
         } catch (error) {
             console.error('Ошибка при создании заказа:', error);
+            const errorMessage = `🚨 КРИТИЧНА ПОМИЛКА: Оплата пройшла, але замовлення НЕ створено!
+Провайдер: Monobank (Merchant API)
+Invoice ID: ${paymentData.invoiceId}
+Reference ID: ${paymentData.reference}
+Клієнт: ${customerData.firstName} ${customerData.lastName}
+Телефон: ${customerData.phone}
+Email: ${customerData.email}
+Місто: ${customerData.address?.city || 'N/A'}
+Відділення: ${customerData.address?.address1 || 'N/A'}
+Store ID: ${decodedReference.store_id}
+Помилка: ${error?.message || 'Невідома помилка'}
+Stack: ${error?.stack?.substring(0, 500) || 'N/A'}`;
+            try {
+                await sendTelegramMessage(errorMessage, '567427708');
+            } catch (tgError) {
+                console.error('Failed to send Telegram notification:', tgError);
+            }
             return res.status(500).json({ message: 'Order create error', error: error.message });
         }
     } else {
@@ -429,6 +452,9 @@ router.post('/payment/hutko', async (req, res) => {
         if (!shop) {
             return res.status(404).json({ error: 'Shop not found' });
         }
+
+
+
 
         // Проверяем наличие необходимых данных для Hutko
         if (!shop.hutko_merchant_id || !shop.hutko_secret_key) {
@@ -563,6 +589,12 @@ router.post('/payment/hutko/callback', async (req, res) => {
             return res.status(404).json({ message: 'Invoice not found' });
         }
 
+        // Idempotency check: если invoice уже обработан, не создаём повторный заказ
+        if (invoice.status === true) {
+            console.log(`Invoice ${orderId} already processed (Hutko), skipping order creation`);
+            return res.status(200).json({ message: 'Already processed' });
+        }
+
         // Проверяем статус платежа
         if (paymentData.response_status === 'success' && paymentData.order_status === 'approved') {
             // Извлекаем reference_id из merchant_data
@@ -673,6 +705,19 @@ router.post('/payment/hutko/callback', async (req, res) => {
         }
     } catch (error) {
         console.error('Ошибка при обработке callback от Hutko:', error);
+        const errorMessage = `🚨 КРИТИЧНА ПОМИЛКА: Оплата Hutko пройшла, але замовлення НЕ створено!
+Провайдер: Hutko
+Order ID: ${paymentData?.order_id || 'N/A'}
+Response Status: ${paymentData?.response_status || 'N/A'}
+Order Status: ${paymentData?.order_status || 'N/A'}
+Callback Data: ${JSON.stringify(paymentData).substring(0, 500)}
+Помилка: ${error?.message || 'Невідома помилка'}
+Stack: ${error?.stack?.substring(0, 500) || 'N/A'}`;
+        try {
+            await sendTelegramMessage(errorMessage, '567427708');
+        } catch (tgError) {
+            console.error('Failed to send Telegram notification:', tgError);
+        }
         return res.status(500).json({ message: 'Callback processing error', error: error.message });
     }
 });

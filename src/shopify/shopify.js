@@ -341,7 +341,7 @@ Errors: ${JSON.stringify(draftOrderData.body.data.draftOrderCreate.userErrors)}`
               const itemNames = lineItems.map(item => item.name || item.title).join(', ');
 
               if (Number(storeId) === 1) {
-                sendTelegramMessage(`Нове замовлення: ${itemNames}`, '-1002431256352');
+                await sendTelegramMessage(`Нове замовлення: ${itemNames}`, '-1002431256352');
               }
 
               const customerId = response.data.order.customer.id;

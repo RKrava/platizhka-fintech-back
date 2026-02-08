@@ -157,9 +157,15 @@ IP: ${clientIp}`;
             return res.status(404).json({ message: 'Invoice not found' });
         }
 
+        // Idempotency check: если invoice уже обработан, не создаём повторный заказ
+        if (invoice.status === true) {
+            console.log(`Invoice ${paymentData.orderId} already processed (MonoCheckout), skipping order creation`);
+            return res.status(200).json({ message: 'Already processed' });
+        }
+
         const gaTrackingData = await GATrackingData.findById(paymentData.orderId);
         const cartDataGA4 = gaTrackingData.cart_data_ga4 ? gaTrackingData.cart_data_ga4 : null;
-        
+
         // Проверяем и корректируем email если нужно
         const validEmailDomains = ['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'icloud.com', 'ukr.net'];
         const email = paymentData.mainClientInfo.email;
