@@ -107,7 +107,7 @@ router.post('/order/create', async (req, res) => {
 })
 
 router.post('/payment', async (req, res) => {
-    const { cartToken, formData, cartData, storeId, redirectUrl } = req.body;
+    const { cartToken, formData, cartData, storeId, redirectUrl, estimatedTotal } = req.body;
 
     // Формируем объект basketOrder на основе данных cartData, модифицируя названия если нужно
     const basketOrder = cartData.map(item => {
@@ -163,7 +163,8 @@ router.post('/payment', async (req, res) => {
     const referenceId = await new Reference({ base64: reference }).save()
 
     console.log(cartData)
-    const totalAmount = cartData.reduce((acc, item) => acc + (item.price * item.count * 100), 0);
+    const totalAmountFromItems = cartData.reduce((acc, item) => acc + (item.price * item.count * 100), 0);
+    const totalAmount = estimatedTotal ? Math.round(estimatedTotal * 100) : totalAmountFromItems;
 
     const invoiceData = {
         amount: totalAmount,
@@ -445,7 +446,7 @@ router.get('/order/number', async (req, res) => {
 
 // Эндпоинт для создания заказа в Hutko (аналог /payment для Mono)
 router.post('/payment/hutko', async (req, res) => {
-    const { cartToken, formData, cartData, storeId, redirectUrl } = req.body;
+    const { cartToken, formData, cartData, storeId, redirectUrl, estimatedTotal } = req.body;
 
     try {
         const shop = await Shop.findById(storeId);
@@ -492,7 +493,8 @@ router.post('/payment/hutko', async (req, res) => {
         const referenceId = await new Reference({ base64: reference }).save();
 
         console.log(cartData);
-        const totalAmount = cartData.reduce((acc, item) => acc + (item.price * item.count * 100), 0);
+        const totalAmountFromItems = cartData.reduce((acc, item) => acc + (item.price * item.count * 100), 0);
+        const totalAmount = estimatedTotal ? Math.round(estimatedTotal * 100) : totalAmountFromItems;
 
         // Формируем описание заказа
         const orderDesc = cartData.map(item => `${item.title} x${item.count}`).join(', ');
