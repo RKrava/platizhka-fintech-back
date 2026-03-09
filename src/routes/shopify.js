@@ -521,12 +521,13 @@ router.post('/payment/hutko', async (req, res) => {
 
         // Формируем параметры для запроса
         // Сохраняем reference_id в merchant_data для использования в callback
+        const hutkoOrderId = `${referenceId}_${Date.now()}`;
         const merchantData = JSON.stringify({ reference_id: referenceId.toString() });
         const requestParams = {
             sender_email: formData.email,
             response_url: (redirectUrl + "?connector_id=" + connector.id.toString()),
             server_callback_url: `https://platizhka-back.vercel.app/shopify/payment/hutko/callback`,
-            order_id: referenceId,
+            order_id: hutkoOrderId,
             currency: 'UAH',
             merchant_id: shop.hutko_merchant_id,
             order_desc: orderDesc.substring(0, 255), // Ограничение длины описания
@@ -559,15 +560,15 @@ router.post('/payment/hutko', async (req, res) => {
 
         const token = response.data.response.token;
 
-        // Сохраняем invoice с order_id как идентификатором
-        await new Invoice({ id: referenceId, status: false, storeid: storeId }).save();
+        // Сохраняем invoice с hutko order_id как идентификатором
+        await new Invoice({ id: hutkoOrderId, status: false, storeid: storeId }).save();
 
         // Формируем pageUrl с токеном
         const pageUrl = `https://pay.hutko.org/merchants/ce3dc7675b723b76d2abdaab35e9c6ecb77f3662/default/index.html?token=${token}`;
 
         res.json({
             success: true,
-            invoiceId: referenceId,
+            invoiceId: hutkoOrderId,
             pageUrl: pageUrl,
             connectorId: connector.id.toString()
         });
@@ -619,8 +620,18 @@ router.post('/payment/hutko/callback', async (req, res) => {
 
         // Проверяем статус платежа
         if (paymentData.response_status === 'success' && paymentData.order_status === 'approved') {
-            // Извлекаем reference_id из merchant_data
-            let referenceId = orderId;
+            // Извлекаем reference_id из merchant_data или парсим из order_id
+            let referenceId;
+            if (paymentData.merchant_data) {
+                try {
+                    const md = JSON.parse(paymentData.merchant_data);
+                    referenceId = md.reference_id;
+                } catch (e) {
+                    referenceId = orderId.split('_')[0];
+                }
+            } else {
+                referenceId = orderId.split('_')[0];
+            }
 
             const reference = await Reference.findById(Number(referenceId));
             if (!reference) {
