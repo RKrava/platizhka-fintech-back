@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "build": "webpack --mode=production index.js -o build/index.js"
+    "build": "webpack --mode=production"
   },
   "dependencies": {
     "@hutko/js-sdk": "^2.0.5",
