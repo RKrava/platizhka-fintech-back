@@ -1,7 +1,7 @@
 const express = require('express');
 const axios = require("axios");
 const crypto = require('crypto');
-const {getCartShopify, createOrder, getOrderNumber, sendTelegramMessage} = require("../shopify/shopify");
+const {getCartShopify, createOrder, getOrderNumber, sendTelegramMessage, applyDiscountCode} = require("../shopify/shopify");
 const Shop = require("../models/Shop");
 const Invoice = require("../models/Invoice");
 const { sendGA4Conversion } = require('../services/ga4');
@@ -84,6 +84,26 @@ router.get('/cart', async (req, res) => {
     } catch (error) {
         console.error('Shopify request error:', error);
         res.status(500).json({ error: 'Shopify API error' });
+    }
+});
+
+router.post('/cart/discount', async (req, res) => {
+    try {
+        const { cartId, discountCode, storeId } = req.body;
+        if (!cartId || !discountCode || !storeId) {
+            return res.status(400).json({ error: 'cartId, discountCode and storeId are required' });
+        }
+        const shop = await Shop.findById(storeId);
+        const shopData = {
+            apiSecretKey: shop.storefront_api_token,
+            hostName: shop.shopify_url,
+            adminApiAccessToken: shop.admin_api_token
+        };
+        const result = await applyDiscountCode(cartId, [discountCode], storeId, shopData);
+        res.json(result);
+    } catch (error) {
+        console.error('Discount code error:', error);
+        res.status(500).json({ error: 'Failed to apply discount code' });
     }
 });
 

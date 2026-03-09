@@ -626,4 +626,81 @@ const getOrderNumber = async (orderId, storeId, shopData) => {
     }
 }
 
-module.exports = { getCartShopify, createOrder, initialConfig, sendTelegramMessage, getOrderNumber };
+const applyDiscountCode = async (cartId, discountCodes, storeId, shopData) => {
+    const mutation = `
+        mutation cartDiscountCodesUpdate($cartId: ID!, $discountCodes: [String!]) {
+          cartDiscountCodesUpdate(cartId: $cartId, discountCodes: $discountCodes) {
+            cart {
+              id
+              discountCodes {
+                code
+                applicable
+              }
+              lines(first: 100) {
+                edges {
+                  node {
+                    id
+                    quantity
+                    merchandise {
+                      ... on ProductVariant {
+                        id
+                        title
+                        sku
+                        availableForSale
+                        price {
+                          amount
+                          currencyCode
+                        }
+                        product {
+                          id
+                          title
+                          description
+                          vendor
+                          handle
+                          images(first: 5) {
+                            edges {
+                              node {
+                                url
+                                altText
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                    attributes {
+                      key
+                      value
+                    }
+                    discountAllocations {
+                      discountedAmount {
+                        amount
+                      }
+                    }
+                  }
+                }
+              }
+              estimatedCost {
+                totalAmount {
+                  amount
+                  currencyCode
+                }
+              }
+            }
+            userErrors {
+              field
+              message
+            }
+          }
+        }
+    `;
+    const storeFrontClient = await getStoreFrontClient(storeId, shopData);
+    return storeFrontClient.request(mutation, {
+        variables: {
+            cartId: 'gid://shopify/Cart/' + cartId,
+            discountCodes,
+        },
+    });
+};
+
+module.exports = { getCartShopify, createOrder, initialConfig, sendTelegramMessage, getOrderNumber, applyDiscountCode };
