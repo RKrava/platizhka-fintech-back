@@ -171,18 +171,12 @@ const createDraftOrder = async (customerData, checkoutData, storeId, shopData) =
                 { key: "Comment", value: customerData.note },
             ],
             "taxExempt": true,
-            "tags": [
-                "Auto created",
-            ],
+            "tags": checkoutData.discountCode
+                ? ["Auto created", `Discount: ${checkoutData.discountCode}`]
+                : ["Auto created"],
             "shippingAddress": customerData.address,
-            // "billingAddress": {
-            //     "address1": "456 Main St",
-            //     "city": "Toronto",
-            //     "province": "Ontario",
-            //     "country": "Canada",
-            //     "zip": "Z9Z 9Z9"
-            // },
             "lineItems": checkoutData.lineItems,
+            ...(checkoutData.appliedDiscount ? { "appliedDiscount": checkoutData.appliedDiscount } : {}),
         }
     }
     return await client.query({
@@ -287,9 +281,37 @@ const createOrder = async (cartId, customerData, pendingPayment, storeId, shopDa
     })
 
 
+    // Extract discount code and calculate cart-level discount
+    const discountCodes = cart.data.cart.discountCodes || [];
+    const appliedDiscountCode = discountCodes.find(dc => dc.code && dc.applicable);
+
+    let orderLevelDiscount = null;
+    if (appliedDiscountCode) {
+        // Check if any line items already have appliedDiscount (line-level allocations)
+        const hasLineDiscounts = lineItems.some(li => li.appliedDiscount);
+        if (!hasLineDiscounts) {
+            // Cart-level discount: calculate from price difference
+            const lineItemsTotal = cart.data.cart.lines.edges.reduce(
+                (sum, edge) => sum + parseFloat(edge.node.merchandise.price.amount) * edge.node.quantity, 0
+            );
+            const cartTotal = parseFloat(cart.data.cart.estimatedCost.totalAmount.amount);
+            const discountAmount = lineItemsTotal - cartTotal;
+            if (discountAmount > 0) {
+                orderLevelDiscount = {
+                    description: appliedDiscountCode.code,
+                    title: appliedDiscountCode.code,
+                    value: discountAmount,
+                    valueType: "FIXED_AMOUNT"
+                };
+            }
+        }
+    }
+
     const checkoutData = {
         lineItems,
         totalAmount: cart.data.cart.estimatedCost.totalAmount,
+        appliedDiscount: orderLevelDiscount,
+        discountCode: appliedDiscountCode ? appliedDiscountCode.code : null,
     };
 
     await new Order({
