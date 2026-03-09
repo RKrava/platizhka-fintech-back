@@ -8,6 +8,10 @@ const getCartShopify = async (cartId, storeId, shopData) => {
          query getCart($cartId: ID!) {
       cart(id: $cartId) {
         id
+        discountCodes {
+          code
+          applicable
+        }
         lines(first: 100) {
           edges {
             node {
