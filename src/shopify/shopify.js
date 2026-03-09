@@ -349,10 +349,34 @@ Errors: ${JSON.stringify(draftOrderData.body.data.draftOrderCreate.userErrors)}`
     const completeOrderData = await completeDraftOrder(draftOrderData.body.data.draftOrderCreate.draftOrder.id,
         pendingPayment, storeId, shopData)
     
-    // After order is completed, update the customer's marketing preferences
+    // After order is completed, update discount codes, customer marketing, and send notifications
     if (completeOrderData.body.data.draftOrderComplete.draftOrder.order.id) {
       const orderId = completeOrderData.body.data.draftOrderComplete.draftOrder.order.id.split('/').pop();
       try {
+          // If there's a discount code, attach it to the order so Shopify tracks usage
+          if (checkoutData.discountCode && checkoutData.appliedDiscount) {
+              await axios.put(
+                  `https://${shopData.hostName}/admin/api/2024-10/orders/${orderId}.json`,
+                  {
+                      order: {
+                          id: orderId,
+                          discount_codes: [{
+                              code: checkoutData.discountCode,
+                              amount: String(checkoutData.appliedDiscount.value),
+                              type: "fixed_amount"
+                          }]
+                      }
+                  },
+                  {
+                      headers: {
+                          "X-Shopify-Access-Token": shopData.adminApiAccessToken,
+                          "Content-Type": "application/json"
+                      }
+                  }
+              );
+              console.log(`Discount code ${checkoutData.discountCode} attached to order ${orderId}`);
+          }
+
           await axios.get(
               `https://${shopData.hostName}/admin/api/2024-10/orders/${orderId}.json`,
               {
@@ -392,7 +416,7 @@ Errors: ${JSON.stringify(draftOrderData.body.data.draftOrderCreate.userErrors)}`
               }
           });
       } catch (error) {
-          console.error('Error updating customer marketing preferences:', error);
+          console.error('Error in post-order processing:', error);
       }
     }
 
