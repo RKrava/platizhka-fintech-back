@@ -12,6 +12,7 @@ const analyticsRoutes = require("./src/routes/analytics");
 const monoCheckoutRoutes = require("./src/routes/monoCheckout");
 const courseRoutes = require("./src/routes/course");
 const printerRoutes = require("./src/routes/printer");
+const promoCodeRoutes = require("./src/routes/promoCodes");
 const app = express();
 
 app.use(cors());
@@ -26,6 +27,7 @@ app.use('/analytics', analyticsRoutes);
 app.use('/mono', monoCheckoutRoutes);
 app.use('/course', courseRoutes);
 app.use('/printer', printerRoutes);
+app.use('/promo-codes', promoCodeRoutes);
 
 // Создаем HTTP сервер
 const server = http.createServer(app);

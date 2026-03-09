@@ -249,7 +249,7 @@ const sendTelegramMessage = async (message, chatId) => {
     }
 };
 
-const createOrder = async (cartId, customerData, pendingPayment, storeId, shopData) => {
+const createOrder = async (cartId, customerData, pendingPayment, storeId, shopData, promoData = null) => {
     const cart = await getCartShopify(cartId, storeId, shopData)
     const cartLineIdArray = []
     const lineItems = cart.data.cart.lines.edges.map((item) => {
@@ -263,55 +263,27 @@ const createOrder = async (cartId, customerData, pendingPayment, storeId, shopDa
             lineItem.customAttributes = item.node.attributes
         }
 
-        if (item.node.discountAllocations?.length) {
-            let discountAmount = 0
-
-            item.node.discountAllocations.map((discounts) => {
-                //TODO: взависимости от типа скидки делить или нет
-                discountAmount += Number(discounts.discountedAmount.amount)/item.node.quantity
-            })
-
-            lineItem.appliedDiscount = {
-                value: discountAmount,
-                valueType: "FIXED_AMOUNT"
-            }
-        }
-
         return lineItem
     })
 
-
-    // Extract discount code and calculate cart-level discount
-    const discountCodes = cart.data.cart.discountCodes || [];
-    const appliedDiscountCode = discountCodes.find(dc => dc.code && dc.applicable);
-
+    // Apply our custom promo code discount
     let orderLevelDiscount = null;
-    if (appliedDiscountCode) {
-        // Check if any line items already have appliedDiscount (line-level allocations)
-        const hasLineDiscounts = lineItems.some(li => li.appliedDiscount);
-        if (!hasLineDiscounts) {
-            // Cart-level discount: calculate from price difference
-            const lineItemsTotal = cart.data.cart.lines.edges.reduce(
-                (sum, edge) => sum + parseFloat(edge.node.merchandise.price.amount) * edge.node.quantity, 0
-            );
-            const cartTotal = parseFloat(cart.data.cart.estimatedCost.totalAmount.amount);
-            const discountAmount = lineItemsTotal - cartTotal;
-            if (discountAmount > 0) {
-                orderLevelDiscount = {
-                    description: appliedDiscountCode.code,
-                    title: appliedDiscountCode.code,
-                    value: discountAmount,
-                    valueType: "FIXED_AMOUNT"
-                };
-            }
-        }
+    let discountCode = null;
+    if (promoData && promoData.discount_amount > 0) {
+        discountCode = promoData.code;
+        orderLevelDiscount = {
+            description: promoData.code,
+            title: promoData.code,
+            value: promoData.discount_amount,
+            valueType: "FIXED_AMOUNT"
+        };
     }
 
     const checkoutData = {
         lineItems,
         totalAmount: cart.data.cart.estimatedCost.totalAmount,
         appliedDiscount: orderLevelDiscount,
-        discountCode: appliedDiscountCode ? appliedDiscountCode.code : null,
+        discountCode: discountCode,
     };
 
     await new Order({

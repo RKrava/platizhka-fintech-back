@@ -8,6 +8,7 @@ const { sendGA4Conversion } = require('../services/ga4');
 const GATrackingData = require("../models/GATrackingData");
 const InvoiceConnector = require('../models/InvoiceConnector');
 const Reference = require('../models/References');
+const PromoCode = require('../models/PromoCode');
 const router = express.Router();
 
 // Добавьте эту строку перед определением маршрутов
@@ -112,6 +113,7 @@ router.post('/order/create', async (req, res) => {
         const customerData = req.body.customerData
         const cartId = req.body.cartId
         const storeId = req.body.storeId
+        const promoData = req.body.promoData ? JSON.parse(req.body.promoData) : null
         const shop = await Shop.findById(req.body.storeId);
         const shopData = {
             apiSecretKey: shop.storefront_api_token,
@@ -119,7 +121,24 @@ router.post('/order/create', async (req, res) => {
             adminApiAccessToken: shop.admin_api_token
         };
         customerData.payment = 'Накладений платіж'
-        res.json(await createOrder(cartId, customerData, true, storeId, shopData))
+        const result = await createOrder(cartId, customerData, true, storeId, shopData, promoData)
+
+        // Record promo code usage
+        if (promoData && promoData.promoCodeId) {
+            try {
+                await PromoCode.incrementUsage(promoData.promoCodeId);
+                await PromoCode.recordUsage(promoData.promoCodeId, {
+                    orderId: result?.draftOrderComplete?.draftOrder?.order?.id || '',
+                    email: customerData.email,
+                    phone: customerData.phone,
+                    discountApplied: promoData.discount_amount
+                });
+            } catch (promoErr) {
+                console.error('Error recording promo usage:', promoErr);
+            }
+        }
+
+        res.json(result)
     } catch (error) {
         console.error('Shopify request error:', error);
         res.status(500).json({ error: error.toString() });
@@ -164,6 +183,7 @@ router.post('/payment', async (req, res) => {
     }
 
     // Шифруем reference (в простом виде через Base64)
+    const monoPromoData = formData.promoData ? JSON.parse(formData.promoData) : null;
     const reference = Buffer.from(JSON.stringify({
         cartToken,
         firstName: formData.firstName,
@@ -174,17 +194,19 @@ router.post('/payment', async (req, res) => {
         warehouse: formData.warehouse,
         city: formData.city,
         store_id: Number(storeId),
-        connectorId: connector.id.toString(), // Сохраняем connectorId в reference
-        // gclid: formData.gclid, //_gcl_aw
-        // clientId: formData.clientId, //client_id
-        // cartDataGA4: formData.cartData //cartData
+        connectorId: connector.id.toString(),
+        promoData: monoPromoData,
     })).toString('base64');
 
     const referenceId = await new Reference({ base64: reference }).save()
 
     console.log(cartData)
     const totalAmountFromItems = cartData.reduce((acc, item) => acc + (item.price * item.count * 100), 0);
-    const totalAmount = estimatedTotal ? Math.round(estimatedTotal * 100) : totalAmountFromItems;
+    let totalAmount = estimatedTotal ? Math.round(estimatedTotal * 100) : totalAmountFromItems;
+    // Apply our promo code discount to Mono payment amount
+    if (monoPromoData && monoPromoData.discount_amount > 0) {
+        totalAmount = Math.max(0, totalAmount - Math.round(monoPromoData.discount_amount * 100));
+    }
 
     const invoiceData = {
         amount: totalAmount,
@@ -291,13 +313,30 @@ router.post('/payment/mono', async (req, res) => {
                 hostName: shop.shopify_url,
                 adminApiAccessToken: shop.admin_api_token
             };
+            const monoPromoData = decodedReference.promoData || null;
             const createOrderResponse = await createOrder(
                 decodedReference.cartToken,
                 customerData,
                 false,
                 storeId,
-                shopData
+                shopData,
+                monoPromoData
             );
+
+            // Record promo code usage for Mono payments
+            if (monoPromoData && monoPromoData.promoCodeId) {
+                try {
+                    await PromoCode.incrementUsage(monoPromoData.promoCodeId);
+                    await PromoCode.recordUsage(monoPromoData.promoCodeId, {
+                        orderId: createOrderResponse?.draftOrderComplete?.draftOrder?.order?.id || '',
+                        email: customerData.email,
+                        phone: customerData.phone,
+                        discountApplied: monoPromoData.discount_amount
+                    });
+                } catch (promoErr) {
+                    console.error('Error recording promo usage (Mono):', promoErr);
+                }
+            }
 
             // Ищем коннектор по connectorId из reference (для старого API)
             // или по mono_id (для нового API, если бы использовался)
@@ -497,6 +536,7 @@ router.post('/payment/hutko', async (req, res) => {
         }
 
         // Шифруем reference (в простом виде через Base64)
+        const promoData = formData.promoData ? JSON.parse(formData.promoData) : null;
         const reference = Buffer.from(JSON.stringify({
             cartToken,
             firstName: formData.firstName,
@@ -508,13 +548,18 @@ router.post('/payment/hutko', async (req, res) => {
             city: formData.city,
             store_id: Number(storeId),
             connectorId: connector.id.toString(),
+            promoData: promoData,
         })).toString('base64');
 
         const referenceId = await new Reference({ base64: reference }).save();
 
         console.log(cartData);
         const totalAmountFromItems = cartData.reduce((acc, item) => acc + (item.price * item.count * 100), 0);
-        const totalAmount = estimatedTotal ? Math.round(estimatedTotal * 100) : totalAmountFromItems;
+        let totalAmount = estimatedTotal ? Math.round(estimatedTotal * 100) : totalAmountFromItems;
+        // Apply our promo code discount to payment amount
+        if (promoData && promoData.discount_amount > 0) {
+            totalAmount = Math.max(0, totalAmount - Math.round(promoData.discount_amount * 100));
+        }
 
         // Формируем описание заказа
         const orderDesc = cartData.map(item => `${item.title} x${item.count}`).join(', ');
@@ -666,13 +711,30 @@ router.post('/payment/hutko/callback', async (req, res) => {
                 adminApiAccessToken: shop.admin_api_token
             };
 
+            const refPromoData = decodedReference.promoData || null;
             const createOrderResponse = await createOrder(
                 decodedReference.cartToken,
                 customerData,
                 false,
                 storeId,
-                shopData
+                shopData,
+                refPromoData
             );
+
+            // Record promo code usage
+            if (refPromoData && refPromoData.promoCodeId) {
+                try {
+                    await PromoCode.incrementUsage(refPromoData.promoCodeId);
+                    await PromoCode.recordUsage(refPromoData.promoCodeId, {
+                        orderId: createOrderResponse?.draftOrderComplete?.draftOrder?.order?.id || '',
+                        email: customerData.email,
+                        phone: customerData.phone,
+                        discountApplied: refPromoData.discount_amount
+                    });
+                } catch (promoErr) {
+                    console.error('Error recording promo usage (Hutko):', promoErr);
+                }
+            }
 
             // Ищем коннектор по connectorId из reference
             let connector = null;
