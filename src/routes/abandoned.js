@@ -57,10 +57,14 @@ router.get('/recover/:token', async (req, res) => {
             console.error('Error fetching shop for recovery:', e);
         }
 
+        // storeName — чисте ім'я без протоколу (bricktopia.store, не https://bricktopia.store)
+        const rawDomain = shopData?.domain_url || shopData?.name || '';
+        const cleanStoreName = rawDomain.replace(/^https?:\/\//, '');
+
         res.json({
             cartToken: checkout.cart_token,
             storeId: checkout.store_id,
-            storeName: shopData?.domain_url || shopData?.name || '',
+            storeName: cleanStoreName,
             shopifyDomain: shopData?.shopify_url || '',
             firstName: checkout.first_name,
             lastName: checkout.last_name,
