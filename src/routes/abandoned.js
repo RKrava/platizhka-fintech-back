@@ -1,5 +1,6 @@
 const express = require('express');
 const AbandonedCheckout = require('../models/AbandonedCheckout');
+const Shop = require('../models/Shop');
 const router = express.Router();
 router.use(express.json());
 
@@ -48,9 +49,19 @@ router.get('/recover/:token', async (req, res) => {
             return res.status(404).json({ error: 'Checkout not found' });
         }
 
+        // Отримуємо дані магазину для відновлення сесії
+        let shopData = null;
+        try {
+            shopData = await Shop.findById(checkout.store_id);
+        } catch (e) {
+            console.error('Error fetching shop for recovery:', e);
+        }
+
         res.json({
             cartToken: checkout.cart_token,
             storeId: checkout.store_id,
+            storeName: shopData?.domain_url || shopData?.name || '',
+            shopifyDomain: shopData?.shopify_url || '',
             firstName: checkout.first_name,
             lastName: checkout.last_name,
             phone: checkout.phone,

@@ -65,19 +65,31 @@ class AbandonedCheckout {
         return result.rows;
     }
 
-    static async markCompleted(cartToken, storeId) {
-        await db.query(
-            `UPDATE abandoned_checkouts SET status = 'completed', updated_at = NOW()
-             WHERE cart_token = $1 AND store_id = $2 AND status = 'abandoned'`,
-            [cartToken, storeId]
-        );
-    }
+    static async markCompleted(cartToken, storeId, phone, email) {
+        // Match by cart_token OR phone OR email within the same store
+        const conditions = [];
+        const params = [storeId];
+        let idx = 2;
 
-    static async markCompletedBySession(sessionId, storeId) {
+        if (cartToken) {
+            conditions.push(`cart_token = $${idx++}`);
+            params.push(cartToken);
+        }
+        if (phone) {
+            conditions.push(`phone = $${idx++}`);
+            params.push(phone);
+        }
+        if (email) {
+            conditions.push(`email = $${idx++}`);
+            params.push(email);
+        }
+
+        if (conditions.length === 0) return;
+
         await db.query(
             `UPDATE abandoned_checkouts SET status = 'completed', updated_at = NOW()
-             WHERE session_id = $1 AND store_id = $2 AND status = 'abandoned'`,
-            [sessionId, storeId]
+             WHERE store_id = $1 AND status = 'abandoned' AND (${conditions.join(' OR ')})`,
+            params
         );
     }
 }

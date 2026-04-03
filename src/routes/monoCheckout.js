@@ -235,10 +235,12 @@ IP: ${clientIp}`;
 
             await invoice.changeStatus();
 
-            // Позначаємо abandoned checkout як completed
+            // Позначаємо abandoned checkout як completed (по cart, phone або email)
             try {
                 const cartToken = (paymentData.basket_id.split('_')[0]).replace('kkeyk', '?key=');
-                await AbandonedCheckout.markCompleted(cartToken, invoice.storeid);
+                const phone = paymentData.deliveryRecipientInfo?.phoneNumber || customerData.phone;
+                const email = paymentData.mainClientInfo?.email || customerData.email;
+                await AbandonedCheckout.markCompleted(cartToken, invoice.storeid, phone, email);
             } catch (err) {
                 console.error('Error marking abandoned checkout as completed (mono):', err);
             }

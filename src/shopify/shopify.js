@@ -398,9 +398,9 @@ Errors: ${JSON.stringify(draftOrderData.body.data.draftOrderCreate.userErrors)}`
 
     await clearCart(cartId, cartLineIdArray, storeId, shopData)
 
-    // Позначаємо abandoned checkout як completed
+    // Позначаємо abandoned checkout як completed (по cart_token, phone або email)
     try {
-        await AbandonedCheckout.markCompleted(cartId, storeId);
+        await AbandonedCheckout.markCompleted(cartId, storeId, customerData.phone, customerData.email);
     } catch (err) {
         console.error('Error marking abandoned checkout as completed:', err);
     }
