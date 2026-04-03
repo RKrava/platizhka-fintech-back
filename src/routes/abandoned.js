@@ -144,4 +144,21 @@ router.get('/list', async (req, res) => {
     }
 });
 
+// Notification step counts для дашборду
+router.get('/notifications', async (req, res) => {
+    try {
+        const { checkoutIds } = req.query;
+        if (!checkoutIds) {
+            return res.json({ counts: {} });
+        }
+        const ids = checkoutIds.split(',').map(Number).filter(n => !isNaN(n));
+        const NotificationLog = require('../models/NotificationLog');
+        const counts = await NotificationLog.getStepCounts(ids);
+        res.json({ counts });
+    } catch (error) {
+        console.error('Error fetching notification counts:', error);
+        res.status(500).json({ error: 'Failed to fetch notification counts' });
+    }
+});
+
 module.exports = router;

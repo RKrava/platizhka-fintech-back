@@ -93,6 +93,28 @@ class AbandonedCheckout {
             params
         );
     }
+
+    // Для cron: abandoned checkouts які потребують нотифікації
+    // Повертає checkouts з інфо про останній відправлений step
+    static async findForNotification(storeId) {
+        const result = await db.query(
+            `SELECT ac.*,
+                    nl.step AS last_step,
+                    nl.sent_at AS last_sent_at
+             FROM abandoned_checkouts ac
+             LEFT JOIN LATERAL (
+                SELECT step, sent_at FROM notification_log
+                WHERE abandoned_checkout_id = ac.id
+                ORDER BY step DESC LIMIT 1
+             ) nl ON true
+             WHERE ac.store_id = $1
+               AND ac.status = 'abandoned'
+               AND (ac.phone IS NOT NULL OR ac.email IS NOT NULL)
+             ORDER BY ac.updated_at ASC`,
+            [storeId]
+        );
+        return result.rows;
+    }
 }
 
 module.exports = AbandonedCheckout;

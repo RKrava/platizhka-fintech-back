@@ -31,10 +31,18 @@ app.use('/printer', printerRoutes);
 app.use('/promo-codes', promoCodeRoutes);
 app.use('/abandoned', abandonedRoutes);
 
+// Cron: abandoned cart notifications (every 10 minutes)
+const cron = require('node-cron');
+const { processAbandonedCarts } = require('./src/services/abandonedCartNotifier');
+
+cron.schedule('*/10 * * * *', () => {
+    console.log('[Cron] Processing abandoned carts...');
+    processAbandonedCarts();
+});
+
 // Создаем HTTP сервер
 const server = http.createServer(app);
 
-
 server.listen(process.env.PORT || 3001, () => {
-
+    console.log(`Server running on port ${process.env.PORT || 3001}`);
 });
