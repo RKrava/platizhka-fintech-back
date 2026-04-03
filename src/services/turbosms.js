@@ -2,31 +2,28 @@ const axios = require('axios');
 
 const API_URL = 'https://api.turbosms.ua';
 
-function getToken() {
-    return process.env.TURBOSMS_TOKEN;
-}
-
-function getHeaders() {
+function getHeaders(token) {
     return {
-        'Authorization': `Bearer ${getToken()}`,
+        'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
     };
 }
 
 // Viber з автоматичним SMS fallback (гібридна відправка TurboSMS)
-async function sendViberWithSmsFallback(phone, viberText, smsText, sender) {
+// token — з shop.turbosms_token або env TURBOSMS_TOKEN
+async function sendViberWithSmsFallback(phone, viberText, smsText, sender, token) {
+    const apiToken = token || process.env.TURBOSMS_TOKEN;
+    if (!apiToken) {
+        console.error('[TurboSMS] No API token configured');
+        return { success: false, error: 'No API token' };
+    }
+
     try {
         const response = await axios.post(`${API_URL}/message/send.json`, {
             recipients: [phone],
-            viber: {
-                sender: sender,
-                text: viberText
-            },
-            sms: {
-                sender: sender,
-                text: smsText
-            }
-        }, { headers: getHeaders() });
+            viber: { sender, text: viberText },
+            sms: { sender, text: smsText }
+        }, { headers: getHeaders(apiToken) });
 
         const result = response.data;
         const messageId = result.response_result?.[0]?.message_id || null;
@@ -45,15 +42,15 @@ async function sendViberWithSmsFallback(phone, viberText, smsText, sender) {
 }
 
 // Тільки SMS
-async function sendSms(phone, text, sender) {
+async function sendSms(phone, text, sender, token) {
+    const apiToken = token || process.env.TURBOSMS_TOKEN;
+    if (!apiToken) return { success: false, error: 'No API token' };
+
     try {
         const response = await axios.post(`${API_URL}/message/send.json`, {
             recipients: [phone],
-            sms: {
-                sender: sender,
-                text: text
-            }
-        }, { headers: getHeaders() });
+            sms: { sender, text }
+        }, { headers: getHeaders(apiToken) });
 
         const result = response.data;
         const messageId = result.response_result?.[0]?.message_id || null;
@@ -62,7 +59,6 @@ async function sendSms(phone, text, sender) {
             console.log(`[TurboSMS] SMS sent to ${phone}, message_id: ${messageId}`);
             return { success: true, messageId };
         } else {
-            console.error(`[TurboSMS] Error: ${result.response_status}`);
             return { success: false, error: result.response_status };
         }
     } catch (error) {
@@ -71,17 +67,4 @@ async function sendSms(phone, text, sender) {
     }
 }
 
-// Перевірка статусу повідомлення
-async function getStatus(messageId) {
-    try {
-        const response = await axios.post(`${API_URL}/message/status.json`, {
-            messages: [messageId]
-        }, { headers: getHeaders() });
-        return response.data;
-    } catch (error) {
-        console.error('[TurboSMS] Status check failed:', error.message);
-        return null;
-    }
-}
-
-module.exports = { sendViberWithSmsFallback, sendSms, getStatus };
+module.exports = { sendViberWithSmsFallback, sendSms };

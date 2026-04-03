@@ -63,11 +63,12 @@ function parseCartItems(cartDataStr) {
 async function processStore(shop) {
     const storeId = shop.id;
     const sender = shop.turbosms_sender;
+    const turboToken = shop.turbosms_token || process.env.TURBOSMS_TOKEN; // shop-level або env fallback
     const promoCode = shop.abandoned_promo_code;
     const storeName = shop.domain_url || shop.name || '';
 
-    if (!sender) {
-        console.log(`[Notifier] Store ${storeId}: no turbosms_sender configured, skipping Viber/SMS`);
+    if (!sender || !turboToken) {
+        console.log(`[Notifier] Store ${storeId}: TurboSMS not configured (sender: ${!!sender}, token: ${!!turboToken})`);
     }
 
     const checkouts = await AbandonedCheckout.findForNotification(storeId);
@@ -81,12 +82,12 @@ async function processStore(shop) {
         try {
             // Step 1: Viber/SMS через 30 хв
             if (lastStep === 0 && (now - updatedAt) >= STEP1_DELAY) {
-                if (checkout.phone && sender) {
+                if (checkout.phone && sender && turboToken) {
                     const link = await createShortRecoveryLink(storeName, checkout.recovery_token, null, 1, storeId, checkout.id);
                     const viberText = `Ви не завершили замовлення. Ваші товари ще чекають на вас! Повернутися: ${link}`;
                     const smsText = `Ви не завершили замовлення. Повернутися: ${link}`;
 
-                    const result = await sendViberWithSmsFallback(checkout.phone, viberText, smsText, sender);
+                    const result = await sendViberWithSmsFallback(checkout.phone, viberText, smsText, sender, turboToken);
 
                     await NotificationLog.save({
                         abandonedCheckoutId: checkout.id,
@@ -130,14 +131,14 @@ async function processStore(shop) {
 
             // Step 3: Viber/SMS зі знижкою через 48 год після step 2
             if (lastStep === 2 && (now - lastSentAt) >= STEP3_DELAY) {
-                if (checkout.phone && sender) {
+                if (checkout.phone && sender && turboToken) {
                     const link = await createShortRecoveryLink(storeName, checkout.recovery_token, promoCode, 3, storeId, checkout.id);
                     const discount = promoCode ? ` зі знижкою (промокод ${promoCode})` : '';
 
                     const viberText = `Спеціально для вас! Завершіть замовлення${discount}: ${link}`;
                     const smsText = `Знижка на ваше замовлення${discount}! ${link}`;
 
-                    const result = await sendViberWithSmsFallback(checkout.phone, viberText, smsText, sender);
+                    const result = await sendViberWithSmsFallback(checkout.phone, viberText, smsText, sender, turboToken);
 
                     await NotificationLog.save({
                         abandonedCheckoutId: checkout.id,
