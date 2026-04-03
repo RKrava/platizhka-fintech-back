@@ -1,7 +1,7 @@
 const AbandonedCheckout = require('../models/AbandonedCheckout');
 const NotificationLog = require('../models/NotificationLog');
-const ShortLink = require('../models/ShortLink');
 const Shop = require('../models/Shop');
+const axios = require('axios');
 const { sendViberWithSmsFallback } = require('./turbosms');
 const { sendAbandonedCartEmail } = require('./emailService');
 
@@ -10,8 +10,9 @@ const STEP1_DELAY = 30 * 60 * 1000;        // 30 хв після покидан�
 const STEP2_DELAY = 24 * 60 * 60 * 1000;   // 24 год після step 1
 const STEP3_DELAY = 48 * 60 * 60 * 1000;   // 48 год після step 2 (72 год від покидання)
 
-// Базовий URL для коротких посилань. Замінити на свій короткий домен коли буде готовий
-const SHORT_LINK_BASE = process.env.SHORT_LINK_BASE || 'https://platizhka-back.vercel.app/r';
+// URL сервісу коротких посилань
+const SHORT_LINK_API = process.env.SHORT_LINK_API; // напр. https://bk.link/api/create
+const SHORT_LINK_TOKEN = process.env.SHORT_LINK_TOKEN;
 
 function getRecoveryUrl(storeName, recoveryToken, promoCode, step) {
     const clean = (storeName || '').replace(/^https?:\/\//, '');
@@ -21,20 +22,32 @@ function getRecoveryUrl(storeName, recoveryToken, promoCode, step) {
     return url;
 }
 
-// Створити коротке посилання і повернути його
+// Створити коротке посилання через окремий сервіс
 async function createShortRecoveryLink(storeName, recoveryToken, promoCode, step, storeId, checkoutId) {
     const fullUrl = getRecoveryUrl(storeName, recoveryToken, promoCode, step);
+
+    // Якщо сервіс коротких посилань не налаштований — повертаємо повну URL
+    if (!SHORT_LINK_API || !SHORT_LINK_TOKEN) {
+        return fullUrl;
+    }
+
     try {
-        const code = await ShortLink.create({
-            targetUrl: fullUrl,
+        const response = await axios.post(SHORT_LINK_API, {
+            url: fullUrl,
             storeId,
-            abandonedCheckoutId: checkoutId,
+            checkoutId,
             step
+        }, {
+            headers: { 'Authorization': `Bearer ${SHORT_LINK_TOKEN}` }
         });
-        return `${SHORT_LINK_BASE}/${code}`;
+
+        if (response.data.success && response.data.shortUrl) {
+            return response.data.shortUrl;
+        }
+        return fullUrl;
     } catch (err) {
         console.error('[ShortLink] Error creating short link:', err.message);
-        return fullUrl; // fallback на повну URL
+        return fullUrl;
     }
 }
 
