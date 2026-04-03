@@ -10,8 +10,8 @@ const STEP1_DELAY = 30 * 60 * 1000;        // 30 хв після покидан�
 const STEP2_DELAY = 24 * 60 * 60 * 1000;   // 24 год після step 1
 const STEP3_DELAY = 48 * 60 * 60 * 1000;   // 48 год після step 2 (72 год від покидання)
 
-// URL сервісу коротких посилань
-const SHORT_LINK_API = process.env.SHORT_LINK_API; // напр. https://bk.link/api/create
+// URL сервісу коротких посилань (brikl.ink)
+const SHORT_LINK_API = process.env.SHORT_LINK_API; // https://brikl.ink/api/create
 const SHORT_LINK_TOKEN = process.env.SHORT_LINK_TOKEN;
 
 function getRecoveryUrl(storeName, recoveryToken, promoCode, step) {
