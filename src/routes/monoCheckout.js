@@ -6,7 +6,8 @@ const Invoice = require("../models/Invoice");
 const { sendGA4Conversion } = require('../services/ga4');
 const GATrackingData = require("../models/GATrackingData");
 const InvoiceConnector = require('../models/InvoiceConnector');
-const { sendTelegramMessage } = require('../shopify/shopify'); // Добавляем импорт
+const { sendTelegramMessage } = require('../shopify/shopify');
+const AbandonedCheckout = require('../models/AbandonedCheckout');
 const router = express.Router();
 router.use(express.json());
 
@@ -233,6 +234,14 @@ IP: ${clientIp}`;
     
 
             await invoice.changeStatus();
+
+            // Позначаємо abandoned checkout як completed
+            try {
+                const cartToken = (paymentData.basket_id.split('_')[0]).replace('kkeyk', '?key=');
+                await AbandonedCheckout.markCompleted(cartToken, invoice.storeid);
+            } catch (err) {
+                console.error('Error marking abandoned checkout as completed (mono):', err);
+            }
 
             // Отправка данных в GA4
             if (cartDataGA4 && cartDataGA4.lines && cartDataGA4.lines.edges && cartDataGA4.lines.edges.length > 0) {

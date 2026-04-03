@@ -196,6 +196,7 @@ router.post('/payment', async (req, res) => {
         store_id: Number(storeId),
         connectorId: connector.id.toString(),
         promoData: monoPromoData,
+        marketingConsent: formData.marketingConsent || false,
     })).toString('base64');
 
     const referenceId = await new Reference({ base64: reference }).save()
@@ -291,7 +292,8 @@ router.post('/payment/mono', async (req, res) => {
             country: 'Ukraine',
             zip: '00000'
         },
-        payment: 'Monopay'
+        payment: 'Monopay',
+        marketingConsent: decodedReference.marketingConsent !== undefined ? decodedReference.marketingConsent : true
     }
 
     // Проверка статуса платежа
@@ -549,6 +551,7 @@ router.post('/payment/hutko', async (req, res) => {
             store_id: Number(storeId),
             connectorId: connector.id.toString(),
             promoData: promoData,
+            marketingConsent: formData.marketingConsent || false,
         })).toString('base64');
 
         const referenceId = await new Reference({ base64: reference }).save();
@@ -699,7 +702,8 @@ router.post('/payment/hutko/callback', async (req, res) => {
                     country: 'Ukraine',
                     zip: '00000'
                 },
-                payment: 'Hutko'
+                payment: 'Hutko',
+                marketingConsent: decodedReference.marketingConsent !== undefined ? decodedReference.marketingConsent : true
             };
 
             const storeId = invoice.storeid;

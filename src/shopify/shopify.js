@@ -1,5 +1,6 @@
 const {getStoreFrontClient, getShopifySession, getShopifyApi} = require("../config/shopifyConfig");
 const Order = require("../models/Order");
+const AbandonedCheckout = require("../models/AbandonedCheckout");
 const {shopifyApi} = require("@shopify/shopify-api");
 const axios = require("axios");
 
@@ -368,14 +369,17 @@ Errors: ${JSON.stringify(draftOrderData.body.data.draftOrderCreate.userErrors)}`
 
               const customerId = response.data.order.customer.id;
               if (customerId) {
+                  const marketingConsent = customerData.marketingConsent !== undefined
+                      ? customerData.marketingConsent
+                      : true; // fallback для зворотної сумісності
                   await axios.put(
                       `https://${shopData.hostName}/admin/api/2024-10/customers/${customerId}.json`,
                       {
                           customer: {
                               id: customerId,
-                              accepts_marketing: true,
+                              accepts_marketing: marketingConsent,
                               accepts_marketing_updated_at: new Date().toISOString(),
-                              marketing_opt_in_level: "SINGLE_OPT_IN"
+                              marketing_opt_in_level: marketingConsent ? "SINGLE_OPT_IN" : "UNKNOWN"
                           }
                       },
                       {
@@ -393,7 +397,13 @@ Errors: ${JSON.stringify(draftOrderData.body.data.draftOrderCreate.userErrors)}`
     }
 
     await clearCart(cartId, cartLineIdArray, storeId, shopData)
-  
+
+    // Позначаємо abandoned checkout як completed
+    try {
+        await AbandonedCheckout.markCompleted(cartId, storeId);
+    } catch (err) {
+        console.error('Error marking abandoned checkout as completed:', err);
+    }
 
     return completeOrderData.body.data;
 }

@@ -13,6 +13,7 @@ const monoCheckoutRoutes = require("./src/routes/monoCheckout");
 const courseRoutes = require("./src/routes/course");
 const printerRoutes = require("./src/routes/printer");
 const promoCodeRoutes = require("./src/routes/promoCodes");
+const abandonedRoutes = require("./src/routes/abandoned");
 const app = express();
 
 app.use(cors());
@@ -28,6 +29,7 @@ app.use('/mono', monoCheckoutRoutes);
 app.use('/course', courseRoutes);
 app.use('/printer', printerRoutes);
 app.use('/promo-codes', promoCodeRoutes);
+app.use('/abandoned', abandonedRoutes);
 
 // Создаем HTTP сервер
 const server = http.createServer(app);
