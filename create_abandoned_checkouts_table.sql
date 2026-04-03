@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS abandoned_checkouts (
   nova_poshta_type VARCHAR(50),
   payment_method VARCHAR(50),
   marketing_consent BOOLEAN DEFAULT false,
+  cart_data TEXT,
   recovery_token UUID UNIQUE DEFAULT gen_random_uuid(),
   status VARCHAR(20) DEFAULT 'abandoned',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),

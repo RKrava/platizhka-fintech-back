@@ -1,7 +1,7 @@
 const db = require('../config/db');
 
 class AbandonedCheckout {
-    constructor({ storeId, cartToken, sessionId, firstName, lastName, phone, email, city, warehouse, novaPoshtaType, paymentMethod, marketingConsent }) {
+    constructor({ storeId, cartToken, sessionId, firstName, lastName, phone, email, city, warehouse, novaPoshtaType, paymentMethod, marketingConsent, cartData }) {
         this.storeId = storeId;
         this.cartToken = cartToken;
         this.sessionId = sessionId;
@@ -14,13 +14,14 @@ class AbandonedCheckout {
         this.novaPoshtaType = novaPoshtaType;
         this.paymentMethod = paymentMethod;
         this.marketingConsent = marketingConsent || false;
+        this.cartData = cartData || null;
     }
 
     async upsert() {
         const result = await db.query(
             `INSERT INTO abandoned_checkouts
-                (store_id, cart_token, session_id, first_name, last_name, phone, email, city, warehouse, nova_poshta_type, payment_method, marketing_consent, updated_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
+                (store_id, cart_token, session_id, first_name, last_name, phone, email, city, warehouse, nova_poshta_type, payment_method, marketing_consent, cart_data, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
              ON CONFLICT (session_id, store_id) DO UPDATE SET
                 cart_token = COALESCE(EXCLUDED.cart_token, abandoned_checkouts.cart_token),
                 first_name = COALESCE(EXCLUDED.first_name, abandoned_checkouts.first_name),
@@ -32,13 +33,14 @@ class AbandonedCheckout {
                 nova_poshta_type = COALESCE(EXCLUDED.nova_poshta_type, abandoned_checkouts.nova_poshta_type),
                 payment_method = COALESCE(EXCLUDED.payment_method, abandoned_checkouts.payment_method),
                 marketing_consent = EXCLUDED.marketing_consent,
+                cart_data = COALESCE(EXCLUDED.cart_data, abandoned_checkouts.cart_data),
                 updated_at = NOW()
              RETURNING id, recovery_token`,
             [
                 this.storeId, this.cartToken, this.sessionId,
                 this.firstName, this.lastName, this.phone, this.email,
                 this.city, this.warehouse, this.novaPoshtaType,
-                this.paymentMethod, this.marketingConsent
+                this.paymentMethod, this.marketingConsent, this.cartData
             ]
         );
         return result.rows[0];
@@ -66,7 +68,6 @@ class AbandonedCheckout {
     }
 
     static async markCompleted(cartToken, storeId, phone, email) {
-        // Match by cart_token OR phone OR email within the same store
         const conditions = [];
         const params = [storeId];
         let idx = 2;

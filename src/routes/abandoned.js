@@ -1,6 +1,7 @@
 const express = require('express');
 const AbandonedCheckout = require('../models/AbandonedCheckout');
 const Shop = require('../models/Shop');
+const { getStoreFrontClient } = require('../config/shopifyConfig');
 const router = express.Router();
 router.use(express.json());
 
@@ -11,7 +12,7 @@ router.post('/track', async (req, res) => {
             storeId, cartToken, sessionId,
             firstName, lastName, phone, email,
             city, warehouse, novaPoshtaType,
-            paymentMethod, marketingConsent
+            paymentMethod, marketingConsent, cartData
         } = req.body;
 
         if (!sessionId || !storeId) {
@@ -30,7 +31,8 @@ router.post('/track', async (req, res) => {
             warehouse,
             novaPoshtaType,
             paymentMethod,
-            marketingConsent: marketingConsent || false
+            marketingConsent: marketingConsent || false,
+            cartData: cartData || null
         });
 
         const result = await checkout.upsert();
@@ -49,23 +51,67 @@ router.get('/recover/:token', async (req, res) => {
             return res.status(404).json({ error: 'Checkout not found' });
         }
 
-        // Отримуємо дані магазину для відновлення сесії
-        let shopData = null;
+        // Отримуємо дані магазину
+        let shop = null;
         try {
-            shopData = await Shop.findById(checkout.store_id);
+            shop = await Shop.findById(checkout.store_id);
         } catch (e) {
             console.error('Error fetching shop for recovery:', e);
         }
 
-        // storeName — чисте ім'я без протоколу (bricktopia.store, не https://bricktopia.store)
-        const rawDomain = shopData?.domain_url || shopData?.name || '';
+        const rawDomain = shop?.domain_url || shop?.name || '';
         const cleanStoreName = rawDomain.replace(/^https?:\/\//, '');
 
+        // Спробуємо створити новий кошик Shopify з збережених товарів
+        let newCartToken = checkout.cart_token; // fallback на старий токен
+        if (checkout.cart_data && shop) {
+            try {
+                const cartItems = JSON.parse(checkout.cart_data);
+                // cartItems — масив { variantId, quantity, attributes }
+                if (cartItems.length > 0) {
+                    const shopData = {
+                        apiSecretKey: shop.storefront_api_token,
+                        hostName: shop.shopify_url,
+                        adminApiAccessToken: shop.admin_api_token
+                    };
+                    const storefrontClient = await getStoreFrontClient(checkout.store_id, shopData);
+
+                    const lines = cartItems.map(item => ({
+                        merchandiseId: item.variantId,
+                        quantity: item.quantity,
+                        ...(item.attributes && item.attributes.length > 0
+                            ? { attributes: item.attributes }
+                            : {})
+                    }));
+
+                    const result = await storefrontClient.request(
+                        `mutation cartCreate($input: CartInput!) {
+                            cartCreate(input: $input) {
+                                cart { id }
+                                userErrors { field message }
+                            }
+                        }`,
+                        { variables: { input: { lines } } }
+                    );
+
+                    const newCartId = result?.data?.cartCreate?.cart?.id;
+                    if (newCartId) {
+                        // cartId формат: gid://shopify/Cart/TOKEN — витягуємо токен
+                        newCartToken = newCartId.replace('gid://shopify/Cart/', '');
+                        console.log('Created new cart for recovery:', newCartToken);
+                    }
+                }
+            } catch (e) {
+                console.error('Error creating recovery cart:', e);
+                // Продовжуємо зі старим токеном
+            }
+        }
+
         res.json({
-            cartToken: checkout.cart_token,
+            cartToken: newCartToken,
             storeId: checkout.store_id,
             storeName: cleanStoreName,
-            shopifyDomain: shopData?.shopify_url || '',
+            shopifyDomain: shop?.shopify_url || '',
             firstName: checkout.first_name,
             lastName: checkout.last_name,
             phone: checkout.phone,
