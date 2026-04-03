@@ -1,20 +1,26 @@
 const nodemailer = require('nodemailer');
 
-let transporter = null;
+// Кеш транспортерів по ключу (щоб не створювати щоразу)
+const transporterCache = {};
 
-function getTransporter() {
-    if (!transporter) {
-        transporter = nodemailer.createTransport({
-            host: process.env.SMTP_HOST,
-            port: parseInt(process.env.SMTP_PORT || '587'),
-            secure: false,
-            auth: {
-                user: process.env.SMTP_USER,
-                pass: process.env.SMTP_PASS
-            }
+function getTransporter(smtpConfig) {
+    const host = smtpConfig?.host || process.env.SMTP_HOST;
+    const port = smtpConfig?.port || parseInt(process.env.SMTP_PORT || '587');
+    const user = smtpConfig?.user || process.env.SMTP_USER;
+    const pass = smtpConfig?.pass || process.env.SMTP_PASS;
+
+    if (!host || !user || !pass) return null;
+
+    const key = `${host}:${port}:${user}`;
+    if (!transporterCache[key]) {
+        transporterCache[key] = nodemailer.createTransport({
+            host,
+            port,
+            secure: port === 465,
+            auth: { user, pass }
         });
     }
-    return transporter;
+    return transporterCache[key];
 }
 
 // Генерація HTML для abandoned cart email
@@ -69,12 +75,20 @@ function buildAbandonedCartHtml({ firstName, cartItems, recoveryLink, storeName 
     </html>`;
 }
 
-async function sendAbandonedCartEmail({ email, firstName, cartItems, recoveryLink, storeName }) {
+// smtpConfig: { host, port, user, pass, from } — з shop або env
+async function sendAbandonedCartEmail({ email, firstName, cartItems, recoveryLink, storeName, smtpConfig }) {
+    const transport = getTransporter(smtpConfig);
+    if (!transport) {
+        console.error('[Email] SMTP not configured');
+        return { success: false, error: 'SMTP not configured' };
+    }
+
     try {
         const html = buildAbandonedCartHtml({ firstName, cartItems, recoveryLink, storeName });
+        const from = smtpConfig?.from || process.env.SMTP_FROM || 'noreply@platizhka.com';
 
-        const info = await getTransporter().sendMail({
-            from: process.env.SMTP_FROM || 'noreply@platizhka.com',
+        const info = await transport.sendMail({
+            from,
             to: email,
             subject: `${firstName ? firstName + ', в' : 'В'}аше замовлення ще не завершено`,
             html

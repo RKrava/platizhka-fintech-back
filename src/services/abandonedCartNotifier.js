@@ -108,12 +108,21 @@ async function processStore(shop) {
                     const cartItems = parseCartItems(checkout.cart_data);
                     const link = await createShortRecoveryLink(storeName, checkout.recovery_token, null, 2, storeId, checkout.id);
 
+                    const smtpConfig = (shop.smtp_host && shop.smtp_user) ? {
+                        host: shop.smtp_host,
+                        port: shop.smtp_port || 587,
+                        user: shop.smtp_user,
+                        pass: shop.smtp_pass,
+                        from: shop.smtp_from
+                    } : null;
+
                     const result = await sendAbandonedCartEmail({
                         email: checkout.email,
                         firstName: checkout.first_name,
                         cartItems,
                         recoveryLink: link,
-                        storeName: storeName.replace(/^https?:\/\//, '')
+                        storeName: storeName.replace(/^https?:\/\//, ''),
+                        smtpConfig
                     });
 
                     await NotificationLog.save({
