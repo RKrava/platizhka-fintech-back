@@ -14,6 +14,7 @@ const courseRoutes = require("./src/routes/course");
 const printerRoutes = require("./src/routes/printer");
 const promoCodeRoutes = require("./src/routes/promoCodes");
 const abandonedRoutes = require("./src/routes/abandoned");
+const redirectRoutes = require("./src/routes/redirect");
 const app = express();
 
 app.use(cors());
@@ -30,6 +31,7 @@ app.use('/course', courseRoutes);
 app.use('/printer', printerRoutes);
 app.use('/promo-codes', promoCodeRoutes);
 app.use('/abandoned', abandonedRoutes);
+app.use('/r', redirectRoutes);
 
 // Cron: abandoned cart notifications (every 10 minutes)
 const cron = require('node-cron');

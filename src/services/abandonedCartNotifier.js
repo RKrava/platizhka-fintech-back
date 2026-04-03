@@ -1,5 +1,6 @@
 const AbandonedCheckout = require('../models/AbandonedCheckout');
 const NotificationLog = require('../models/NotificationLog');
+const ShortLink = require('../models/ShortLink');
 const Shop = require('../models/Shop');
 const { sendViberWithSmsFallback } = require('./turbosms');
 const { sendAbandonedCartEmail } = require('./emailService');
@@ -9,13 +10,32 @@ const STEP1_DELAY = 30 * 60 * 1000;        // 30 хв після покидан�
 const STEP2_DELAY = 24 * 60 * 60 * 1000;   // 24 год після step 1
 const STEP3_DELAY = 48 * 60 * 60 * 1000;   // 48 год після step 2 (72 год від покидання)
 
-function getRecoveryUrl(storeName, recoveryToken, promoCode) {
+// Базовий URL для коротких посилань. Замінити на свій короткий домен коли буде готовий
+const SHORT_LINK_BASE = process.env.SHORT_LINK_BASE || 'https://platizhka-back.vercel.app/r';
+
+function getRecoveryUrl(storeName, recoveryToken, promoCode, step) {
     const clean = (storeName || '').replace(/^https?:\/\//, '');
     let url = `https://platizhka.vercel.app/${clean}/checkout?recover=${recoveryToken}`;
-    if (promoCode) {
-        url += `&promo=${encodeURIComponent(promoCode)}`;
-    }
+    if (promoCode) url += `&promo=${encodeURIComponent(promoCode)}`;
+    if (step) url += `&step=${step}`;
     return url;
+}
+
+// Створити коротке посилання і повернути його
+async function createShortRecoveryLink(storeName, recoveryToken, promoCode, step, storeId, checkoutId) {
+    const fullUrl = getRecoveryUrl(storeName, recoveryToken, promoCode, step);
+    try {
+        const code = await ShortLink.create({
+            targetUrl: fullUrl,
+            storeId,
+            abandonedCheckoutId: checkoutId,
+            step
+        });
+        return `${SHORT_LINK_BASE}/${code}`;
+    } catch (err) {
+        console.error('[ShortLink] Error creating short link:', err.message);
+        return fullUrl; // fallback на повну URL
+    }
 }
 
 function parseCartItems(cartDataStr) {
@@ -45,15 +65,13 @@ async function processStore(shop) {
         const lastStep = checkout.last_step || 0;
         const lastSentAt = checkout.last_sent_at ? new Date(checkout.last_sent_at).getTime() : 0;
 
-        const recoveryLink = getRecoveryUrl(storeName, checkout.recovery_token, null);
-        const recoveryLinkWithPromo = getRecoveryUrl(storeName, checkout.recovery_token, promoCode);
-
         try {
             // Step 1: Viber/SMS через 30 хв
             if (lastStep === 0 && (now - updatedAt) >= STEP1_DELAY) {
                 if (checkout.phone && sender) {
-                    const viberText = `Ви не завершили замовлення. Ваші товари ще чекають на вас! Повернутися: ${recoveryLink}`;
-                    const smsText = `Ви не завершили замовлення. Повернутися: ${recoveryLink}`;
+                    const link = await createShortRecoveryLink(storeName, checkout.recovery_token, null, 1, storeId, checkout.id);
+                    const viberText = `Ви не завершили замовлення. Ваші товари ще чекають на вас! Повернутися: ${link}`;
+                    const smsText = `Ви не завершили замовлення. Повернутися: ${link}`;
 
                     const result = await sendViberWithSmsFallback(checkout.phone, viberText, smsText, sender);
 
@@ -74,12 +92,13 @@ async function processStore(shop) {
             if (lastStep === 1 && (now - lastSentAt) >= STEP2_DELAY) {
                 if (checkout.email) {
                     const cartItems = parseCartItems(checkout.cart_data);
+                    const link = await createShortRecoveryLink(storeName, checkout.recovery_token, null, 2, storeId, checkout.id);
 
                     const result = await sendAbandonedCartEmail({
                         email: checkout.email,
                         firstName: checkout.first_name,
                         cartItems,
-                        recoveryLink,
+                        recoveryLink: link,
                         storeName: storeName.replace(/^https?:\/\//, '')
                     });
 
@@ -99,7 +118,7 @@ async function processStore(shop) {
             // Step 3: Viber/SMS зі знижкою через 48 год після step 2
             if (lastStep === 2 && (now - lastSentAt) >= STEP3_DELAY) {
                 if (checkout.phone && sender) {
-                    const link = promoCode ? recoveryLinkWithPromo : recoveryLink;
+                    const link = await createShortRecoveryLink(storeName, checkout.recovery_token, promoCode, 3, storeId, checkout.id);
                     const discount = promoCode ? ` зі знижкою (промокод ${promoCode})` : '';
 
                     const viberText = `Спеціально для вас! Завершіть замовлення${discount}: ${link}`;
