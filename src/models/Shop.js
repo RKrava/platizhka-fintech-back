@@ -26,21 +26,31 @@ const defaultCartPageConfig = {
 };
 
 class Shop {
-  constructor({ id, user_id, name, description, shopify_url, domain_url, admin_api_token, storefront_api_token, success_page_config, cart_page_config, mono_token, mono_checkout_token, hutko_merchant_id, hutko_secret_key }) {
-    this.id = id;
-    this.user_id = user_id;
-    this.name = name;
-    this.description = description;
-    this.shopify_url = shopify_url;
-    this.domain_url = domain_url
-    this.admin_api_token = admin_api_token;
-    this.storefront_api_token = storefront_api_token;
-    this.success_page_config = success_page_config;
-    this.cart_page_config = cart_page_config;
-    this.mono_token = mono_token;
-    this.mono_checkout_token = mono_checkout_token;
-    this.hutko_merchant_id = hutko_merchant_id;
-    this.hutko_secret_key = hutko_secret_key;
+  constructor(row) {
+    this.id = row.id;
+    this.user_id = row.user_id;
+    this.name = row.name;
+    this.description = row.description;
+    this.shopify_url = row.shopify_url;
+    this.domain_url = row.domain_url;
+    this.admin_api_token = row.admin_api_token;
+    this.storefront_api_token = row.storefront_api_token;
+    this.success_page_config = row.success_page_config;
+    this.cart_page_config = row.cart_page_config;
+    this.mono_token = row.mono_token;
+    this.mono_checkout_token = row.mono_checkout_token;
+    this.hutko_merchant_id = row.hutko_merchant_id;
+    this.hutko_secret_key = row.hutko_secret_key;
+    // Notification settings
+    this.turbosms_token = row.turbosms_token;
+    this.turbosms_sender = row.turbosms_sender;
+    this.abandoned_promo_code = row.abandoned_promo_code;
+    this.abandoned_notifications_enabled = row.abandoned_notifications_enabled;
+    this.smtp_host = row.smtp_host;
+    this.smtp_port = row.smtp_port;
+    this.smtp_user = row.smtp_user;
+    this.smtp_pass = row.smtp_pass;
+    this.smtp_from = row.smtp_from;
   }
 
   static async create(shopData) {
