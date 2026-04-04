@@ -161,4 +161,35 @@ router.get('/notifications', async (req, res) => {
     }
 });
 
+// Превʼю email для abandoned checkout
+router.get('/email-preview/:id', async (req, res) => {
+    try {
+        const db = require('../config/db');
+        const result = await db.query('SELECT * FROM abandoned_checkouts WHERE id = $1', [req.params.id]);
+        const checkout = result.rows[0];
+        if (!checkout) return res.status(404).send('Not found');
+
+        let shop = null;
+        try { shop = await Shop.findById(checkout.store_id); } catch {}
+        const storeName = (shop?.domain_url || shop?.name || '').replace(/^https?:\/\//, '');
+        const link = `https://platizhka.vercel.app/${storeName}/checkout?recover=${checkout.recovery_token}`;
+
+        let cartItems = [];
+        try { cartItems = JSON.parse(checkout.cart_data || '[]'); } catch {}
+
+        const { getEmailPreviewHtml } = require('../services/emailService');
+        const html = getEmailPreviewHtml({
+            firstName: checkout.first_name,
+            cartItems,
+            recoveryLink: link,
+            storeName
+        });
+
+        res.type('html').send(html);
+    } catch (error) {
+        console.error('Email preview error:', error);
+        res.status(500).send('Error generating preview');
+    }
+});
+
 module.exports = router;
