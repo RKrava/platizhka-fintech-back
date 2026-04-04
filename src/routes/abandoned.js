@@ -12,7 +12,7 @@ router.post('/track', async (req, res) => {
             storeId, cartToken, sessionId,
             firstName, lastName, phone, email,
             city, warehouse, novaPoshtaType,
-            paymentMethod, marketingConsent, cartData
+            paymentMethod, marketingConsent, cartData, cartTotal
         } = req.body;
 
         if (!sessionId || !storeId) {
@@ -32,7 +32,8 @@ router.post('/track', async (req, res) => {
             novaPoshtaType,
             paymentMethod,
             marketingConsent: marketingConsent || false,
-            cartData: cartData || null
+            cartData: cartData || null,
+            cartTotal: cartTotal || null
         });
 
         const result = await checkout.upsert();
@@ -366,6 +367,28 @@ router.get('/debug-config', async (req, res) => {
         SHORT_LINK_TOKEN: process.env.SHORT_LINK_TOKEN ? 'SET (hidden)' : 'NOT SET',
         POSTGRES_URL: process.env.POSTGRES_URL ? 'SET' : 'NOT SET',
     });
+});
+
+// Відписка від повідомлень
+router.get('/unsubscribe/:token', async (req, res) => {
+    try {
+        const db = require('../config/db');
+        const result = await db.query(
+            `UPDATE abandoned_checkouts SET unsubscribed = true, unsubscribed_at = NOW()
+             WHERE recovery_token = $1 AND unsubscribed = false
+             RETURNING first_name`,
+            [req.params.token]
+        );
+
+        const name = result.rows[0]?.first_name || '';
+        res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>body{font-family:-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f5f5f5;}
+.card{background:#fff;border-radius:16px;padding:40px;text-align:center;max-width:400px;box-shadow:0 4px 24px rgba(0,0,0,0.08);}
+h1{font-size:24px;margin:0 0 12px;}p{color:#666;font-size:14px;line-height:1.6;}</style></head>
+<body><div class="card"><h1>Вас відписано</h1><p>${name ? name + ', в' : 'В'}и більше не отримуватимете повідомлення про це замовлення.</p></div></body></html>`);
+    } catch (error) {
+        res.status(500).send('Error');
+    }
 });
 
 module.exports = router;
