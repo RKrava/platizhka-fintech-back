@@ -21,75 +21,36 @@ function getTransporter(smtpConfig) {
 }
 
 function buildAbandonedCartHtml({ firstName, cartItems, recoveryLink, storeName }) {
-    const itemsHtml = cartItems.map(item => `
-        <tr>
-            <td style="width:70px;padding:14px;border-bottom:1px solid #f0f0f0;background:#fff;">
-                ${item.image
-                    ? `<img src="${item.image}" alt="${item.title || ''}" style="width:60px;height:60px;border-radius:10px;object-fit:cover;box-shadow:0 2px 8px rgba(0,0,0,0.1);">`
-                    : `<div style="width:60px;height:60px;border-radius:10px;background:#f5f5f5;"></div>`
-                }
-            </td>
-            <td style="padding:14px;border-bottom:1px solid #f0f0f0;background:#fff;">
-                <span style="font-weight:500;color:#333;font-size:14px;font-family:'Rubik',sans-serif;">${item.title || 'Товар'}</span>
-            </td>
-            <td style="padding:14px;border-bottom:1px solid #f0f0f0;text-align:center;color:#888;font-size:14px;background:#fff;">
-                &times;${item.quantity}
-            </td>
-            <td style="padding:14px;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:600;color:#333;font-size:15px;background:#fff;">
-                ${parseFloat(item.price || 0).toFixed(0)} &#8372;
-            </td>
-        </tr>
-    `).join('');
-
+    const hasProducts = cartItems.length > 0 && cartItems.some(i => i.title);
     const total = cartItems.reduce((sum, item) => sum + (parseFloat(item.price || 0) * (item.quantity || 1)), 0);
+    const greeting = firstName ? `${firstName}, ви` : 'Ви';
+    const displayName = storeName || 'Магазин';
 
-    return `<!DOCTYPE html>
-<html lang="uk">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="color-scheme" content="light dark">
-    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Rubik', 'Segoe UI', sans-serif; background: #f5f5f5; margin: 0; padding: 20px 10px; }
-        @media screen and (max-width: 600px) {
-            .content { padding: 24px 16px !important; }
-            .product-table img { width: 45px !important; height: 45px !important; }
-            .product-table td { padding: 10px 8px !important; font-size: 13px !important; }
-            .cta-btn { padding: 14px 24px !important; font-size: 13px !important; }
-        }
-    </style>
-</head>
-<body style="font-family:'Rubik','Segoe UI',sans-serif;background:#f5f5f5;margin:0;padding:20px 10px;">
-    <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
-
-        <!-- Header -->
-        <div style="background:linear-gradient(135deg,#E42C0B 0%,#FA5800 100%);text-align:center;padding:0;">
-            <img src="https://cdn.shopify.com/s/files/1/0606/8338/6968/files/2_956be77a-8a54-4cd1-9172-47d3934519d5.png?v=1769883440" alt="${storeName}" style="max-width:100%;height:auto;display:block;">
-        </div>
-
-        <!-- Content -->
-        <div class="content" style="padding:40px 30px;background:#fff;">
-            <h2 style="color:#E42C0B;font-size:24px;margin:0 0 16px;text-align:center;font-weight:600;font-family:'Rubik',sans-serif;">
-                ${firstName ? `${firstName}, ви` : 'Ви'} не завершили замовлення
-            </h2>
-            <p style="color:#555;font-size:15px;line-height:1.7;text-align:center;margin:0 0 30px;font-family:'Rubik',sans-serif;">
-                Ваші товари ще чекають на вас. Завершіть оформлення — це займе лише хвилину!
-            </p>
-
-            <!-- CTA Button -->
-            <div style="text-align:center;margin:0 0 30px;">
-                <a href="${recoveryLink}" class="cta-btn" style="background:linear-gradient(135deg,#CBDE25 0%,#A6D700 100%);color:#333;padding:16px 40px;text-decoration:none;border-radius:50px;display:inline-block;font-weight:600;font-size:14px;text-transform:uppercase;letter-spacing:0.5px;box-shadow:0 4px 15px rgba(203,222,37,0.3);font-family:'Rubik',sans-serif;">
-                    Завершити замовлення
-                </a>
-            </div>
-
-            <!-- Products -->
+    const productsSection = hasProducts ? `
             <h3 style="color:#333;font-size:16px;margin:0 0 16px;font-family:'Rubik',sans-serif;font-weight:600;padding-bottom:8px;border-bottom:2px solid #FA5800;display:inline-block;">
-                🛒 Ваш кошик
+                Ваш кошик
             </h3>
-            <table class="product-table" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:separate;border-spacing:0;border-radius:12px;overflow:hidden;border:1px solid #f0f0f0;background:#fff;">
-                ${itemsHtml}
+            <table cellpadding="0" cellspacing="0" style="width:100%;border-collapse:separate;border-spacing:0;border-radius:12px;overflow:hidden;border:1px solid #f0f0f0;background:#fff;">
+                ${cartItems.map(item => `
+                <tr>
+                    <td style="width:70px;padding:14px;border-bottom:1px solid #f0f0f0;background:#fff;">
+                        ${item.image
+                            ? `<img src="${item.image}" alt="" style="width:60px;height:60px;border-radius:10px;object-fit:cover;box-shadow:0 2px 8px rgba(0,0,0,0.1);">`
+                            : `<div style="width:60px;height:60px;border-radius:10px;background:#f5f5f5;"></div>`
+                        }
+                    </td>
+                    <td style="padding:14px;border-bottom:1px solid #f0f0f0;background:#fff;">
+                        <span style="font-weight:500;color:#333;font-size:14px;font-family:'Rubik',sans-serif;">${item.title || 'Товар'}</span>
+                    </td>
+                    <td style="padding:14px;border-bottom:1px solid #f0f0f0;text-align:center;color:#888;font-size:14px;background:#fff;">
+                        &times;${item.quantity || 1}
+                    </td>
+                    ${total > 0 ? `
+                    <td style="padding:14px;border-bottom:1px solid #f0f0f0;text-align:right;font-weight:600;color:#333;font-size:15px;background:#fff;">
+                        ${parseFloat(item.price || 0).toFixed(0)} &#8372;
+                    </td>` : ''}
+                </tr>`).join('')}
+                ${total > 0 ? `
                 <tr>
                     <td colspan="3" style="padding:16px;text-align:right;font-size:14px;color:#666;border-bottom:none;background:#fff;">Доставка:</td>
                     <td style="padding:16px;text-align:right;font-size:14px;color:#666;border-bottom:none;background:#fff;">За тарифами НП</td>
@@ -97,15 +58,57 @@ function buildAbandonedCartHtml({ firstName, cartItems, recoveryLink, storeName 
                 <tr>
                     <td colspan="3" style="padding:18px 16px;text-align:right;font-size:18px;font-weight:600;color:#fff;background:#FA5800;border-bottom:none;">Разом:</td>
                     <td style="padding:18px 16px;text-align:right;font-size:18px;font-weight:600;color:#fff;background:#FA5800;border-bottom:none;">${total.toFixed(0)} &#8372;</td>
-                </tr>
+                </tr>` : ''}
             </table>
+    ` : '';
 
+    return `<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Rubik', 'Segoe UI', sans-serif; background: #f5f5f5; margin: 0; padding: 20px 10px; }
+        @media screen and (max-width: 600px) {
+            .content { padding: 24px 16px !important; }
+            .cta-btn { padding: 14px 24px !important; font-size: 13px !important; }
+        }
+    </style>
+</head>
+<body style="font-family:'Rubik','Segoe UI',sans-serif;background:#f5f5f5;margin:0;padding:20px 10px;">
+    <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+
+        <!-- Header gradient -->
+        <div style="background:linear-gradient(135deg,#E42C0B 0%,#FA5800 100%);text-align:center;padding:32px 30px;">
+            <h1 style="margin:0;color:#fff;font-size:22px;font-weight:700;font-family:'Rubik',sans-serif;letter-spacing:0.5px;">${displayName}</h1>
+        </div>
+
+        <!-- Content -->
+        <div class="content" style="padding:40px 30px;background:#fff;">
+            <h2 style="color:#E42C0B;font-size:22px;margin:0 0 12px;text-align:center;font-weight:600;font-family:'Rubik',sans-serif;">
+                ${greeting} не завершили замовлення
+            </h2>
+            <p style="color:#555;font-size:15px;line-height:1.7;text-align:center;margin:0 0 28px;font-family:'Rubik',sans-serif;">
+                ${hasProducts ? 'Ваші товари ще чекають на вас.' : 'Ви почали оформлення, але не завершили.'} Завершіть — це займе лише хвилину!
+            </p>
+
+            <!-- CTA -->
+            <div style="text-align:center;margin:0 0 ${hasProducts ? '30' : '0'}px;">
+                <a href="${recoveryLink}" class="cta-btn" style="background:linear-gradient(135deg,#CBDE25 0%,#A6D700 100%);color:#333;padding:16px 40px;text-decoration:none;border-radius:50px;display:inline-block;font-weight:600;font-size:14px;text-transform:uppercase;letter-spacing:0.5px;box-shadow:0 4px 15px rgba(203,222,37,0.3);font-family:'Rubik',sans-serif;">
+                    Завершити замовлення
+                </a>
+            </div>
+
+            ${productsSection}
+
+            ${hasProducts ? `
             <!-- Second CTA -->
             <div style="text-align:center;margin:30px 0 0;">
                 <a href="${recoveryLink}" style="background:linear-gradient(135deg,#E42C0B 0%,#FA5800 100%);color:#fff;padding:14px 36px;text-decoration:none;border-radius:50px;display:inline-block;font-weight:600;font-size:14px;letter-spacing:0.5px;box-shadow:0 4px 15px rgba(228,44,11,0.2);font-family:'Rubik',sans-serif;">
                     Повернутися до кошика
                 </a>
-            </div>
+            </div>` : ''}
         </div>
 
         <!-- Footer -->
@@ -157,7 +160,6 @@ async function sendAbandonedCartEmail({ email, firstName, cartItems, recoveryLin
     }
 }
 
-// Генерація HTML для превʼю (без відправки)
 function getEmailPreviewHtml({ firstName, cartItems, recoveryLink, storeName }) {
     return buildAbandonedCartHtml({ firstName, cartItems, recoveryLink, storeName });
 }
