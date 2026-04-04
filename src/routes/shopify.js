@@ -141,6 +141,19 @@ router.post('/order/create', async (req, res) => {
         res.json(result)
     } catch (error) {
         console.error('Shopify request error:', error);
+        try {
+            const customerData = req.body.customerData || {};
+            const errorMsg = `🚨 COD Order Creation Error:
+Store ID: ${req.body.storeId || 'N/A'}
+Customer: ${customerData.firstName || ''} ${customerData.lastName || ''}
+Phone: ${customerData.phone || 'N/A'}
+Email: ${customerData.email || 'N/A'}
+Error: ${error.message || error.toString()}
+Stack: ${(error.stack || '').substring(0, 500)}`;
+            await sendTelegramMessage(errorMsg, '-567427708');
+        } catch (tgErr) {
+            console.error('Failed to send Telegram alert:', tgErr);
+        }
         res.status(500).json({ error: error.toString() });
     }
 })
