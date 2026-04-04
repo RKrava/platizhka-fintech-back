@@ -233,6 +233,70 @@ router.post('/test-email', async (req, res) => {
     }
 });
 
+// Ручна відправка SMS або Email по конкретному checkout
+router.post('/send-manual', async (req, res) => {
+    try {
+        const { checkoutId, channel } = req.body; // channel: 'sms' або 'email'
+        if (!checkoutId || !channel) {
+            return res.status(400).json({ error: 'checkoutId and channel required' });
+        }
+
+        const db = require('../config/db');
+        const result = await db.query('SELECT * FROM abandoned_checkouts WHERE id = $1', [checkoutId]);
+        const checkout = result.rows[0];
+        if (!checkout) return res.status(404).json({ error: 'Checkout not found' });
+
+        const shop = await Shop.findById(checkout.store_id);
+        if (!shop) return res.status(404).json({ error: 'Shop not found' });
+
+        const storeName = (shop.domain_url || shop.name || '').replace(/^https?:\/\//, '');
+        const recoveryLink = `https://platizhka.vercel.app/${storeName}/checkout?recover=${checkout.recovery_token}`;
+
+        if (channel === 'sms') {
+            if (!checkout.phone) return res.status(400).json({ error: 'No phone number' });
+            if (!shop.turbosms_token || !shop.turbosms_sender) return res.status(400).json({ error: 'TurboSMS not configured' });
+
+            const { sendSms } = require('../services/turbosms');
+            const text = `${checkout.first_name ? checkout.first_name + ', в' : 'В'}и не завершили замовлення. Повернутися: ${recoveryLink}`;
+            const sendResult = await sendSms(checkout.phone, text, shop.turbosms_sender, shop.turbosms_token);
+
+            const NotificationLog = require('../models/NotificationLog');
+            await NotificationLog.save({ abandonedCheckoutId: checkout.id, storeId: checkout.store_id, step: 0, channel: 'manual_sms', recipient: checkout.phone, messageId: sendResult.messageId });
+
+            return res.json({ success: sendResult.success, messageId: sendResult.messageId, error: sendResult.error });
+        }
+
+        if (channel === 'email') {
+            if (!checkout.email) return res.status(400).json({ error: 'No email' });
+
+            const smtpConfig = (shop.smtp_host && shop.smtp_user) ? {
+                host: shop.smtp_host, port: shop.smtp_port || 587,
+                user: shop.smtp_user, pass: shop.smtp_pass, from: shop.smtp_from
+            } : null;
+            if (!smtpConfig) return res.status(400).json({ error: 'SMTP not configured' });
+
+            let cartItems = [];
+            try { cartItems = JSON.parse(checkout.cart_data || '[]'); } catch {}
+
+            const { sendAbandonedCartEmail } = require('../services/emailService');
+            const sendResult = await sendAbandonedCartEmail({
+                email: checkout.email, firstName: checkout.first_name, cartItems,
+                recoveryLink, storeName, smtpConfig
+            });
+
+            const NotificationLog = require('../models/NotificationLog');
+            await NotificationLog.save({ abandonedCheckoutId: checkout.id, storeId: checkout.store_id, step: 0, channel: 'manual_email', recipient: checkout.email, messageId: sendResult.messageId });
+
+            return res.json({ success: sendResult.success, messageId: sendResult.messageId, error: sendResult.error });
+        }
+
+        res.status(400).json({ error: 'Invalid channel. Use sms or email.' });
+    } catch (error) {
+        console.error('Manual send error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Превʼю email для abandoned checkout
 router.get('/email-preview/:id', async (req, res) => {
     try {
