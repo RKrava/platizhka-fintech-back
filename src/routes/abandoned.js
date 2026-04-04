@@ -254,16 +254,29 @@ router.post('/send-manual', async (req, res) => {
 
         // Спробувати скоротити посилання
         let recoveryLink = fullUrl;
+        let shortLinkDebug = { configured: false };
         const SHORT_LINK_API = process.env.SHORT_LINK_API;
         const SHORT_LINK_TOKEN = process.env.SHORT_LINK_TOKEN;
         if (SHORT_LINK_API && SHORT_LINK_TOKEN) {
+            shortLinkDebug = { configured: true, api: SHORT_LINK_API };
             try {
                 const axios = require('axios');
                 const resp = await axios.post(SHORT_LINK_API, {
                     url: fullUrl, storeId: checkout.store_id, checkoutId: checkout.id, step: 0
                 }, { headers: { 'Authorization': `Bearer ${SHORT_LINK_TOKEN}` } });
-                if (resp.data.success && resp.data.shortUrl) recoveryLink = resp.data.shortUrl;
-            } catch (e) { console.error('Short link error:', e.message); }
+                if (resp.data.success && resp.data.shortUrl) {
+                    recoveryLink = resp.data.shortUrl;
+                    shortLinkDebug.result = 'ok';
+                    shortLinkDebug.shortUrl = resp.data.shortUrl;
+                } else {
+                    shortLinkDebug.result = 'api_error';
+                    shortLinkDebug.response = resp.data;
+                }
+            } catch (e) {
+                shortLinkDebug.result = 'exception';
+                shortLinkDebug.error = e.message;
+                console.error('Short link error:', e.message);
+            }
         }
 
         if (channel === 'sms') {
@@ -277,7 +290,7 @@ router.post('/send-manual', async (req, res) => {
             const NotificationLog = require('../models/NotificationLog');
             await NotificationLog.save({ abandonedCheckoutId: checkout.id, storeId: checkout.store_id, step: 0, channel: 'manual_sms', recipient: checkout.phone, messageId: sendResult.messageId });
 
-            return res.json({ success: sendResult.success, messageId: sendResult.messageId, error: sendResult.error });
+            return res.json({ success: sendResult.success, messageId: sendResult.messageId, error: sendResult.error, link: recoveryLink, shortLinkDebug });
         }
 
         if (channel === 'email') {
@@ -301,7 +314,7 @@ router.post('/send-manual', async (req, res) => {
             const NotificationLog = require('../models/NotificationLog');
             await NotificationLog.save({ abandonedCheckoutId: checkout.id, storeId: checkout.store_id, step: 0, channel: 'manual_email', recipient: checkout.email, messageId: sendResult.messageId });
 
-            return res.json({ success: sendResult.success, messageId: sendResult.messageId, error: sendResult.error });
+            return res.json({ success: sendResult.success, messageId: sendResult.messageId, error: sendResult.error, link: recoveryLink, shortLinkDebug });
         }
 
         res.status(400).json({ error: 'Invalid channel. Use sms or email.' });
@@ -340,6 +353,15 @@ router.get('/email-preview/:id', async (req, res) => {
         console.error('Email preview error:', error);
         res.status(500).send('Error generating preview');
     }
+});
+
+// Діагностика конфігурації
+router.get('/debug-config', async (req, res) => {
+    res.json({
+        SHORT_LINK_API: process.env.SHORT_LINK_API ? 'SET (' + process.env.SHORT_LINK_API + ')' : 'NOT SET',
+        SHORT_LINK_TOKEN: process.env.SHORT_LINK_TOKEN ? 'SET (hidden)' : 'NOT SET',
+        POSTGRES_URL: process.env.POSTGRES_URL ? 'SET' : 'NOT SET',
+    });
 });
 
 module.exports = router;
