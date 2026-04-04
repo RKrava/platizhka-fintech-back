@@ -178,9 +178,16 @@ router.post('/test-sms', async (req, res) => {
             return res.status(400).json({ error: 'TurboSMS not configured for this shop. Set token and sender in Settings.' });
         }
 
-        const { sendViberWithSmsFallback } = require('../services/turbosms');
+        const { sendViberWithSmsFallback, sendSms } = require('../services/turbosms');
         const text = message || 'Тестове повідомлення від abandoned cart системи';
-        const result = await sendViberWithSmsFallback(phone, text, text, sender, token);
+        const mode = req.body.mode || 'sms'; // 'sms', 'viber', 'hybrid'
+
+        let result;
+        if (mode === 'hybrid') {
+            result = await sendViberWithSmsFallback(phone, text, text, sender, token);
+        } else {
+            result = await sendSms(phone, text, sender, token);
+        }
 
         res.json({ success: result.success, messageId: result.messageId, error: result.error });
     } catch (error) {
