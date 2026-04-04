@@ -161,6 +161,71 @@ router.get('/notifications', async (req, res) => {
     }
 });
 
+// Тестова SMS/Viber
+router.post('/test-sms', async (req, res) => {
+    try {
+        const { phone, message, storeId } = req.body;
+        if (!phone || !storeId) {
+            return res.status(400).json({ error: 'phone and storeId required' });
+        }
+
+        const shop = await Shop.findById(storeId);
+        if (!shop) return res.status(404).json({ error: 'Shop not found' });
+
+        const token = shop.turbosms_token;
+        const sender = shop.turbosms_sender;
+        if (!token || !sender) {
+            return res.status(400).json({ error: 'TurboSMS not configured for this shop. Set token and sender in Settings.' });
+        }
+
+        const { sendViberWithSmsFallback } = require('../services/turbosms');
+        const text = message || 'Тестове повідомлення від abandoned cart системи';
+        const result = await sendViberWithSmsFallback(phone, text, text, sender, token);
+
+        res.json({ success: result.success, messageId: result.messageId, error: result.error });
+    } catch (error) {
+        console.error('Test SMS error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Тестовий email
+router.post('/test-email', async (req, res) => {
+    try {
+        const { email, storeId } = req.body;
+        if (!email || !storeId) {
+            return res.status(400).json({ error: 'email and storeId required' });
+        }
+
+        const shop = await Shop.findById(storeId);
+        if (!shop) return res.status(404).json({ error: 'Shop not found' });
+
+        const smtpConfig = (shop.smtp_host && shop.smtp_user) ? {
+            host: shop.smtp_host, port: shop.smtp_port || 587,
+            user: shop.smtp_user, pass: shop.smtp_pass, from: shop.smtp_from
+        } : null;
+
+        if (!smtpConfig) {
+            return res.status(400).json({ error: 'SMTP not configured for this shop. Set SMTP settings in Settings.' });
+        }
+
+        const { sendAbandonedCartEmail } = require('../services/emailService');
+        const result = await sendAbandonedCartEmail({
+            email,
+            firstName: 'Тест',
+            cartItems: [{ title: 'Тестовий товар', quantity: 1, price: '999', image: '' }],
+            recoveryLink: 'https://bricktopia.store',
+            storeName: (shop.domain_url || shop.name || '').replace(/^https?:\/\//, ''),
+            smtpConfig
+        });
+
+        res.json({ success: result.success, messageId: result.messageId, error: result.error });
+    } catch (error) {
+        console.error('Test email error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Превʼю email для abandoned checkout
 router.get('/email-preview/:id', async (req, res) => {
     try {
