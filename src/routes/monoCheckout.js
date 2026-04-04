@@ -240,7 +240,7 @@ IP: ${clientIp}`;
                 const cartToken = (paymentData.basket_id.split('_')[0]).replace('kkeyk', '?key=');
                 const phone = paymentData.deliveryRecipientInfo?.phoneNumber || customerData.phone;
                 const email = paymentData.mainClientInfo?.email || customerData.email;
-                await AbandonedCheckout.markCompleted(cartToken, invoice.storeid, phone, email);
+                await AbandonedCheckout.markCompleted(cartToken, invoice.storeid, phone, email, null);
             } catch (err) {
                 console.error('Error marking abandoned checkout as completed (mono):', err);
             }

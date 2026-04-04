@@ -67,7 +67,7 @@ class AbandonedCheckout {
         return result.rows;
     }
 
-    static async markCompleted(cartToken, storeId, phone, email) {
+    static async markCompleted(cartToken, storeId, phone, email, recoveryStep) {
         const conditions = [];
         const params = [storeId];
         let idx = 2;
@@ -87,8 +87,12 @@ class AbandonedCheckout {
 
         if (conditions.length === 0) return;
 
+        const stepSet = recoveryStep
+            ? `, converted_from_step = ${parseInt(recoveryStep)}, converted_at = NOW()`
+            : '';
+
         await db.query(
-            `UPDATE abandoned_checkouts SET status = 'completed', updated_at = NOW()
+            `UPDATE abandoned_checkouts SET status = 'completed', updated_at = NOW()${stepSet}
              WHERE store_id = $1 AND status = 'abandoned' AND (${conditions.join(' OR ')})`,
             params
         );

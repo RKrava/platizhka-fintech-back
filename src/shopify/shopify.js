@@ -400,7 +400,7 @@ Errors: ${JSON.stringify(draftOrderData.body.data.draftOrderCreate.userErrors)}`
 
     // Позначаємо abandoned checkout як completed (по cart_token, phone або email)
     try {
-        await AbandonedCheckout.markCompleted(cartId, storeId, customerData.phone, customerData.email);
+        await AbandonedCheckout.markCompleted(cartId, storeId, customerData.phone, customerData.email, customerData.recoveryStep);
     } catch (err) {
         console.error('Error marking abandoned checkout as completed:', err);
     }

@@ -197,6 +197,7 @@ router.post('/payment', async (req, res) => {
         connectorId: connector.id.toString(),
         promoData: monoPromoData,
         marketingConsent: formData.marketingConsent || false,
+        recoveryStep: formData.recoveryStep || null,
     })).toString('base64');
 
     const referenceId = await new Reference({ base64: reference }).save()
@@ -293,7 +294,8 @@ router.post('/payment/mono', async (req, res) => {
             zip: '00000'
         },
         payment: 'Monopay',
-        marketingConsent: decodedReference.marketingConsent !== undefined ? decodedReference.marketingConsent : true
+        marketingConsent: decodedReference.marketingConsent !== undefined ? decodedReference.marketingConsent : true,
+        recoveryStep: decodedReference.recoveryStep || null
     }
 
     // Проверка статуса платежа
@@ -552,6 +554,7 @@ router.post('/payment/hutko', async (req, res) => {
             connectorId: connector.id.toString(),
             promoData: promoData,
             marketingConsent: formData.marketingConsent || false,
+        recoveryStep: formData.recoveryStep || null,
         })).toString('base64');
 
         const referenceId = await new Reference({ base64: reference }).save();
@@ -703,7 +706,8 @@ router.post('/payment/hutko/callback', async (req, res) => {
                     zip: '00000'
                 },
                 payment: 'Hutko',
-                marketingConsent: decodedReference.marketingConsent !== undefined ? decodedReference.marketingConsent : true
+                marketingConsent: decodedReference.marketingConsent !== undefined ? decodedReference.marketingConsent : true,
+        recoveryStep: decodedReference.recoveryStep || null
             };
 
             const storeId = invoice.storeid;
