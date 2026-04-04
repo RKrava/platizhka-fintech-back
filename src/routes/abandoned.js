@@ -284,7 +284,11 @@ router.post('/send-manual', async (req, res) => {
             if (!shop.turbosms_token || !shop.turbosms_sender) return res.status(400).json({ error: 'TurboSMS not configured' });
 
             const { sendSms } = require('../services/turbosms');
-            const text = `${checkout.first_name ? checkout.first_name + ', в' : 'В'}и не завершили замовлення. Повернутися: ${recoveryLink}`;
+            const templates = [
+                `${checkout.first_name ? checkout.first_name + ', о' : 'О'}й, здається ви забули щось класне у кошику! Повертайтесь: ${recoveryLink}`,
+                `${checkout.first_name ? checkout.first_name + ', в' : 'В'}аш кошик сумує без вас 🥺 Завершіть замовлення: ${recoveryLink}`,
+            ];
+            const text = templates[Math.floor(Math.random() * templates.length)];
             const sendResult = await sendSms(checkout.phone, text, shop.turbosms_sender, shop.turbosms_token);
 
             const NotificationLog = require('../models/NotificationLog');
