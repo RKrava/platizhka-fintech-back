@@ -143,12 +143,16 @@ async function sendAbandonedCartEmail({ email, firstName, cartItems, recoveryLin
 
     try {
         const html = buildAbandonedCartHtml({ firstName, cartItems, recoveryLink, storeName });
-        const from = smtpConfig?.from || process.env.SMTP_FROM || 'noreply@platizhka.com';
+        const fromEmail = smtpConfig?.from || process.env.SMTP_FROM || 'noreply@platizhka.com';
+        const fromName = storeName || 'Магазин';
+        const from = `"${fromName}" <${fromEmail}>`;
 
         const info = await transport.sendMail({
             from,
             to: email,
-            subject: `${firstName ? firstName + ', в' : 'В'}аше замовлення ще не завершено`,
+            subject: firstName
+                ? `${firstName}, ваші товари ще чекають на вас 🛒`
+                : `Ви забули щось у кошику 🛒`,
             html
         });
 
