@@ -38,8 +38,8 @@ router.post('/track', async (req, res) => {
         const result = await checkout.upsert();
         res.json({ success: true, recoveryToken: result.recovery_token });
     } catch (error) {
-        console.error('Error tracking checkout:', error);
-        res.status(500).json({ error: 'Failed to track checkout' });
+        console.error('Error tracking checkout:', error.message, error.stack);
+        res.status(500).json({ error: 'Failed to track checkout', details: error.message });
     }
 });
 
@@ -250,7 +250,21 @@ router.post('/send-manual', async (req, res) => {
         if (!shop) return res.status(404).json({ error: 'Shop not found' });
 
         const storeName = (shop.domain_url || shop.name || '').replace(/^https?:\/\//, '');
-        const recoveryLink = `https://platizhka.vercel.app/${storeName}/checkout?recover=${checkout.recovery_token}`;
+        const fullUrl = `https://platizhka.vercel.app/${storeName}/checkout?recover=${checkout.recovery_token}`;
+
+        // Спробувати скоротити посилання
+        let recoveryLink = fullUrl;
+        const SHORT_LINK_API = process.env.SHORT_LINK_API;
+        const SHORT_LINK_TOKEN = process.env.SHORT_LINK_TOKEN;
+        if (SHORT_LINK_API && SHORT_LINK_TOKEN) {
+            try {
+                const axios = require('axios');
+                const resp = await axios.post(SHORT_LINK_API, {
+                    url: fullUrl, storeId: checkout.store_id, checkoutId: checkout.id, step: 0
+                }, { headers: { 'Authorization': `Bearer ${SHORT_LINK_TOKEN}` } });
+                if (resp.data.success && resp.data.shortUrl) recoveryLink = resp.data.shortUrl;
+            } catch (e) { console.error('Short link error:', e.message); }
+        }
 
         if (channel === 'sms') {
             if (!checkout.phone) return res.status(400).json({ error: 'No phone number' });
