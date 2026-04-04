@@ -79,86 +79,94 @@ async function processStore(shop) {
         const lastStep = checkout.last_step || 0;
         const lastSentAt = checkout.last_sent_at ? new Date(checkout.last_sent_at).getTime() : 0;
 
+        const hasPhone = !!(checkout.phone && sender && turboToken);
+        const hasEmail = !!checkout.email;
+        const smtpConfig = (shop.smtp_host && shop.smtp_user) ? {
+            host: shop.smtp_host, port: shop.smtp_port || 587,
+            user: shop.smtp_user, pass: shop.smtp_pass, from: shop.smtp_from
+        } : null;
+        const canEmail = hasEmail && smtpConfig;
+
+        // Немає жодного каналу — пропускаємо
+        if (!hasPhone && !canEmail) continue;
+
         try {
-            // Step 1: Viber/SMS через 30 хв
+            // ===== STEP 1: Нагадування (30 хв) =====
+            // Канал: phone → Viber/SMS, тільки email → Email
             if (lastStep === 0 && (now - updatedAt) >= STEP1_DELAY) {
-                if (checkout.phone && sender && turboToken) {
-                    const link = await createShortRecoveryLink(storeName, checkout.recovery_token, null, 1, storeId, checkout.id);
+                const link = await createShortRecoveryLink(storeName, checkout.recovery_token, null, 1, storeId, checkout.id);
+
+                if (hasPhone) {
                     const viberText = `Ви не завершили замовлення. Ваші товари ще чекають на вас! Повернутися: ${link}`;
                     const smsText = `Ви не завершили замовлення. Повернутися: ${link}`;
-
                     const result = await sendViberWithSmsFallback(checkout.phone, viberText, smsText, sender, turboToken);
-
-                    await NotificationLog.save({
-                        abandonedCheckoutId: checkout.id,
-                        storeId,
-                        step: 1,
-                        channel: 'viber_sms',
-                        recipient: checkout.phone,
-                        messageId: result.messageId
-                    });
-
-                    console.log(`[Notifier] Step 1 sent to ${checkout.phone} (checkout #${checkout.id})`);
-                }
-            }
-
-            // Step 2: Email через 24 год після step 1
-            if (lastStep === 1 && (now - lastSentAt) >= STEP2_DELAY) {
-                if (checkout.email) {
+                    await NotificationLog.save({ abandonedCheckoutId: checkout.id, storeId, step: 1, channel: 'viber_sms', recipient: checkout.phone, messageId: result.messageId });
+                    console.log(`[Notifier] Step 1 viber/sms → ${checkout.phone} (checkout #${checkout.id})`);
+                } else if (canEmail) {
                     const cartItems = parseCartItems(checkout.cart_data);
-                    const link = await createShortRecoveryLink(storeName, checkout.recovery_token, null, 2, storeId, checkout.id);
-
-                    const smtpConfig = (shop.smtp_host && shop.smtp_user) ? {
-                        host: shop.smtp_host,
-                        port: shop.smtp_port || 587,
-                        user: shop.smtp_user,
-                        pass: shop.smtp_pass,
-                        from: shop.smtp_from
-                    } : null;
-
-                    const result = await sendAbandonedCartEmail({
-                        email: checkout.email,
-                        firstName: checkout.first_name,
-                        cartItems,
-                        recoveryLink: link,
-                        storeName: storeName.replace(/^https?:\/\//, ''),
-                        smtpConfig
-                    });
-
-                    await NotificationLog.save({
-                        abandonedCheckoutId: checkout.id,
-                        storeId,
-                        step: 2,
-                        channel: 'email',
-                        recipient: checkout.email,
-                        messageId: result.messageId
-                    });
-
-                    console.log(`[Notifier] Step 2 email sent to ${checkout.email} (checkout #${checkout.id})`);
+                    const result = await sendAbandonedCartEmail({ email: checkout.email, firstName: checkout.first_name, cartItems, recoveryLink: link, storeName: storeName.replace(/^https?:\/\//, ''), smtpConfig });
+                    await NotificationLog.save({ abandonedCheckoutId: checkout.id, storeId, step: 1, channel: 'email', recipient: checkout.email, messageId: result.messageId });
+                    console.log(`[Notifier] Step 1 email → ${checkout.email} (checkout #${checkout.id})`);
                 }
             }
 
-            // Step 3: Viber/SMS зі знижкою через 48 год після step 2
-            if (lastStep === 2 && (now - lastSentAt) >= STEP3_DELAY) {
-                if (checkout.phone && sender && turboToken) {
-                    const link = await createShortRecoveryLink(storeName, checkout.recovery_token, promoCode, 3, storeId, checkout.id);
-                    const discount = promoCode ? ` зі знижкою (промокод ${promoCode})` : '';
+            // ===== STEP 2: Другий канал (24 год) =====
+            // Якщо step 1 був SMS → тепер Email (якщо є)
+            // Якщо step 1 був Email → тепер SMS (якщо є)
+            // Якщо другий канал недоступний → повторити перший канал
+            if (lastStep === 1 && (now - lastSentAt) >= STEP2_DELAY) {
+                const link = await createShortRecoveryLink(storeName, checkout.recovery_token, null, 2, storeId, checkout.id);
+                // Визначаємо який канал був в step 1 з notification_log
+                const db = require('../config/db');
+                const step1Log = await db.query('SELECT channel FROM notification_log WHERE abandoned_checkout_id = $1 AND step = 1 LIMIT 1', [checkout.id]);
+                const step1Channel = step1Log.rows[0]?.channel;
 
+                if (step1Channel === 'viber_sms' && canEmail) {
+                    // Step 1 був SMS → Step 2 Email
+                    const cartItems = parseCartItems(checkout.cart_data);
+                    const result = await sendAbandonedCartEmail({ email: checkout.email, firstName: checkout.first_name, cartItems, recoveryLink: link, storeName: storeName.replace(/^https?:\/\//, ''), smtpConfig });
+                    await NotificationLog.save({ abandonedCheckoutId: checkout.id, storeId, step: 2, channel: 'email', recipient: checkout.email, messageId: result.messageId });
+                    console.log(`[Notifier] Step 2 email → ${checkout.email} (checkout #${checkout.id})`);
+                } else if (step1Channel === 'email' && hasPhone) {
+                    // Step 1 був Email → Step 2 SMS
+                    const viberText = `Нагадуємо: ви не завершили замовлення. Повернутися: ${link}`;
+                    const smsText = `Нагадуємо: ви не завершили замовлення. ${link}`;
+                    const result = await sendViberWithSmsFallback(checkout.phone, viberText, smsText, sender, turboToken);
+                    await NotificationLog.save({ abandonedCheckoutId: checkout.id, storeId, step: 2, channel: 'viber_sms', recipient: checkout.phone, messageId: result.messageId });
+                    console.log(`[Notifier] Step 2 viber/sms → ${checkout.phone} (checkout #${checkout.id})`);
+                } else if (hasPhone) {
+                    // Тільки SMS — повторюємо SMS
+                    const viberText = `Ваші товари ще чекають! Завершіть замовлення: ${link}`;
+                    const smsText = `Ваші товари чекають! ${link}`;
+                    const result = await sendViberWithSmsFallback(checkout.phone, viberText, smsText, sender, turboToken);
+                    await NotificationLog.save({ abandonedCheckoutId: checkout.id, storeId, step: 2, channel: 'viber_sms', recipient: checkout.phone, messageId: result.messageId });
+                    console.log(`[Notifier] Step 2 viber/sms (repeat) → ${checkout.phone} (checkout #${checkout.id})`);
+                } else if (canEmail) {
+                    // Тільки Email — повторюємо Email
+                    const cartItems = parseCartItems(checkout.cart_data);
+                    const result = await sendAbandonedCartEmail({ email: checkout.email, firstName: checkout.first_name, cartItems, recoveryLink: link, storeName: storeName.replace(/^https?:\/\//, ''), smtpConfig });
+                    await NotificationLog.save({ abandonedCheckoutId: checkout.id, storeId, step: 2, channel: 'email', recipient: checkout.email, messageId: result.messageId });
+                    console.log(`[Notifier] Step 2 email (repeat) → ${checkout.email} (checkout #${checkout.id})`);
+                }
+            }
+
+            // ===== STEP 3: Знижка (72 год) =====
+            // Канал: phone → Viber/SMS, тільки email → Email
+            if (lastStep === 2 && (now - lastSentAt) >= STEP3_DELAY) {
+                const link = await createShortRecoveryLink(storeName, checkout.recovery_token, promoCode, 3, storeId, checkout.id);
+                const discount = promoCode ? ` зі знижкою (промокод ${promoCode})` : '';
+
+                if (hasPhone) {
                     const viberText = `Спеціально для вас! Завершіть замовлення${discount}: ${link}`;
                     const smsText = `Знижка на ваше замовлення${discount}! ${link}`;
-
                     const result = await sendViberWithSmsFallback(checkout.phone, viberText, smsText, sender, turboToken);
-
-                    await NotificationLog.save({
-                        abandonedCheckoutId: checkout.id,
-                        storeId,
-                        step: 3,
-                        channel: 'viber_sms',
-                        recipient: checkout.phone,
-                        messageId: result.messageId
-                    });
-
-                    console.log(`[Notifier] Step 3 promo sent to ${checkout.phone} (checkout #${checkout.id})`);
+                    await NotificationLog.save({ abandonedCheckoutId: checkout.id, storeId, step: 3, channel: 'viber_sms', recipient: checkout.phone, messageId: result.messageId });
+                    console.log(`[Notifier] Step 3 viber/sms → ${checkout.phone} (checkout #${checkout.id})`);
+                } else if (canEmail) {
+                    const cartItems = parseCartItems(checkout.cart_data);
+                    const result = await sendAbandonedCartEmail({ email: checkout.email, firstName: checkout.first_name, cartItems, recoveryLink: link, storeName: storeName.replace(/^https?:\/\//, ''), smtpConfig });
+                    await NotificationLog.save({ abandonedCheckoutId: checkout.id, storeId, step: 3, channel: 'email', recipient: checkout.email, messageId: result.messageId });
+                    console.log(`[Notifier] Step 3 email → ${checkout.email} (checkout #${checkout.id})`);
                 }
             }
         } catch (error) {
