@@ -2,13 +2,13 @@ const AbandonedCheckout = require('../models/AbandonedCheckout');
 const NotificationLog = require('../models/NotificationLog');
 const Shop = require('../models/Shop');
 const axios = require('axios');
-const { sendViberWithSmsFallback } = require('./turbosms');
+const { sendViberWithSmsFallback, sendSms } = require('./turbosms');
 const { sendAbandonedCartEmail } = require('./emailService');
 
-// Таймінги (в мілісекундах)
-const STEP1_DELAY = 30 * 60 * 1000;        // 30 хв після покидання
-const STEP2_DELAY = 24 * 60 * 60 * 1000;   // 24 год після step 1
-const STEP3_DELAY = 48 * 60 * 60 * 1000;   // 48 год після step 2 (72 год від покидання)
+// Дефолтні таймінги (використовуються якщо в shop не задано)
+const DEFAULT_STEP1_MINUTES = 30;
+const DEFAULT_STEP2_MINUTES = 1440;  // 24 год
+const DEFAULT_STEP3_MINUTES = 2880;  // 48 год після step 2
 
 // URL сервісу коротких посилань (brikl.ink)
 const SHORT_LINK_API = process.env.SHORT_LINK_API; // https://brikl.ink/api/create
@@ -63,12 +63,18 @@ function parseCartItems(cartDataStr) {
 async function processStore(shop) {
     const storeId = shop.id;
     const sender = shop.turbosms_sender;
-    const turboToken = shop.turbosms_token || process.env.TURBOSMS_TOKEN; // shop-level або env fallback
+    const turboToken = shop.turbosms_token || process.env.TURBOSMS_TOKEN;
     const promoCode = shop.abandoned_promo_code;
     const storeName = shop.domain_url || shop.name || '';
 
+    // Таймінги з налаштувань магазину (хвилини → мілісекунди)
+    const STEP1_DELAY = (shop.notif_step1_minutes || DEFAULT_STEP1_MINUTES) * 60 * 1000;
+    const STEP2_DELAY = (shop.notif_step2_minutes || DEFAULT_STEP2_MINUTES) * 60 * 1000;
+    const STEP3_DELAY = (shop.notif_step3_minutes || DEFAULT_STEP3_MINUTES) * 60 * 1000;
+    const smsFirst = (shop.notif_channel_priority || 'sms_first') === 'sms_first';
+
     if (!sender || !turboToken) {
-        console.log(`[Notifier] Store ${storeId}: TurboSMS not configured (sender: ${!!sender}, token: ${!!turboToken})`);
+        console.log(`[Notifier] Store ${storeId}: TurboSMS not configured`);
     }
 
     const checkouts = await AbandonedCheckout.findForNotification(storeId);
@@ -91,18 +97,20 @@ async function processStore(shop) {
         if (!hasPhone && !canEmail) continue;
 
         try {
-            // ===== STEP 1: Нагадування (30 хв) =====
-            // Канал: phone → Viber/SMS, тільки email → Email
+            // ===== STEP 1: Нагадування =====
+            // Пріоритет каналу з налаштувань: sms_first або email_first
             if (lastStep === 0 && (now - updatedAt) >= STEP1_DELAY) {
                 const link = await createShortRecoveryLink(storeName, checkout.recovery_token, null, 1, storeId, checkout.id);
+                const useSmsFirst = smsFirst ? hasPhone : !canEmail && hasPhone;
+                const useEmailFirst = !smsFirst ? canEmail : !hasPhone && canEmail;
 
-                if (hasPhone) {
+                if (useSmsFirst || (!useEmailFirst && hasPhone)) {
                     const viberText = `Ви не завершили замовлення. Ваші товари ще чекають на вас! Повернутися: ${link}`;
                     const smsText = `Ви не завершили замовлення. Повернутися: ${link}`;
-                    const result = await sendViberWithSmsFallback(checkout.phone, viberText, smsText, sender, turboToken);
-                    await NotificationLog.save({ abandonedCheckoutId: checkout.id, storeId, step: 1, channel: 'viber_sms', recipient: checkout.phone, messageId: result.messageId });
-                    console.log(`[Notifier] Step 1 viber/sms → ${checkout.phone} (checkout #${checkout.id})`);
-                } else if (canEmail) {
+                    const result = await sendSms(checkout.phone, smsText, sender, turboToken);
+                    await NotificationLog.save({ abandonedCheckoutId: checkout.id, storeId, step: 1, channel: 'sms', recipient: checkout.phone, messageId: result.messageId });
+                    console.log(`[Notifier] Step 1 sms → ${checkout.phone} (checkout #${checkout.id})`);
+                } else if (useEmailFirst || canEmail) {
                     const cartItems = parseCartItems(checkout.cart_data);
                     const result = await sendAbandonedCartEmail({ email: checkout.email, firstName: checkout.first_name, cartItems, recoveryLink: link, storeName: storeName.replace(/^https?:\/\//, ''), smtpConfig });
                     await NotificationLog.save({ abandonedCheckoutId: checkout.id, storeId, step: 1, channel: 'email', recipient: checkout.email, messageId: result.messageId });

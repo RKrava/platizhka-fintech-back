@@ -51,6 +51,11 @@ class Shop {
     this.smtp_user = row.smtp_user;
     this.smtp_pass = row.smtp_pass;
     this.smtp_from = row.smtp_from;
+    // Funnel timing & channel
+    this.notif_step1_minutes = row.notif_step1_minutes || 30;
+    this.notif_step2_minutes = row.notif_step2_minutes || 1440;
+    this.notif_step3_minutes = row.notif_step3_minutes || 2880;
+    this.notif_channel_priority = row.notif_channel_priority || 'sms_first';
   }
 
   static async create(shopData) {
