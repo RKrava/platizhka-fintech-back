@@ -102,13 +102,6 @@ function buildAbandonedCartHtml({ firstName, cartItems, recoveryLink, storeName 
 
             ${productsSection}
 
-            ${hasProducts ? `
-            <!-- Second CTA -->
-            <div style="text-align:center;margin:30px 0 0;">
-                <a href="${recoveryLink}" class="cta-btn" style="background:linear-gradient(135deg,#CBDE25 0%,#A6D700 100%);color:#333;padding:16px 40px;text-decoration:none;border-radius:50px;display:inline-block;font-weight:600;font-size:14px;text-transform:uppercase;letter-spacing:0.5px;box-shadow:0 4px 15px rgba(203,222,37,0.3);font-family:'Rubik',sans-serif;">
-                    Завершити замовлення
-                </a>
-            </div>` : ''}
         </div>
 
         <!-- Footer -->
