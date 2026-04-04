@@ -34,14 +34,8 @@ app.use('/promo-codes', promoCodeRoutes);
 app.use('/abandoned', abandonedRoutes);
 // app.use('/r', redirectRoutes); // moved to short-links service
 
-// Cron: abandoned cart notifications (every 10 minutes)
-const cron = require('node-cron');
-const { processAbandonedCarts } = require('./src/services/abandonedCartNotifier');
-
-cron.schedule('*/10 * * * *', () => {
-    console.log('[Cron] Processing abandoned carts...');
-    processAbandonedCarts();
-});
+// Cron moved to separate service: cart-recovery (Railway)
+// API endpoints for manual send/test/preview stay here
 
 // Создаем HTTP сервер
 const server = http.createServer(app);
