@@ -6,10 +6,10 @@ const PromoCodeOrder = require('../models/PromoCodeOrder');
 // Публічна статистика промокоду (для інфлюенсерів, без авторизації)
 router.get('/public/:code', async (req, res) => {
     try {
-        const { store } = req.query;
+        const storeId = req.query.store ? Number(req.query.store) : null;
         const code = req.params.code;
-        const stats = await PromoCodeOrder.getPublicStatsByCode(code, store || null);
-        const orders = await PromoCodeOrder.getPublicOrdersByCode(code, store || null);
+        const stats = await PromoCodeOrder.getPublicStatsByCode(code, storeId);
+        const orders = await PromoCodeOrder.getPublicOrdersByCode(code, storeId);
         res.json({ code: code.toUpperCase(), stats, orders });
     } catch (error) {
         console.error('Error fetching public promo stats:', error);
