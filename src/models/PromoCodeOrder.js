@@ -94,7 +94,6 @@ class PromoCodeOrder {
             );
         });
     }
-}
 
     /**
      * Public stats for a specific promo code (across all stores or by store)
