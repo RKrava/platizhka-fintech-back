@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const PromoCode = require('../models/PromoCode');
+const PromoCodeOrder = require('../models/PromoCodeOrder');
 
 // Валидация промокода (фронтенд чекаут)
 router.post('/validate', async (req, res) => {
@@ -33,6 +34,36 @@ router.post('/validate', async (req, res) => {
     } catch (error) {
         console.error('Error validating promo code:', error);
         res.status(500).json({ success: false, error: 'Помилка при перевірці промокоду' });
+    }
+});
+
+// --- Статистика промокодів ---
+
+// Агрегована статистика по всіх промокодах магазину
+router.get('/stats/:storeId', async (req, res) => {
+    try {
+        const { from, to } = req.query;
+        let stats;
+        if (from && to) {
+            stats = await PromoCodeOrder.getStatsByDateRange(req.params.storeId, from, to);
+        } else {
+            stats = await PromoCodeOrder.getStatsByStore(req.params.storeId);
+        }
+        res.json(stats);
+    } catch (error) {
+        console.error('Error fetching promo stats:', error);
+        res.status(500).json({ error: 'Failed to fetch promo stats' });
+    }
+});
+
+// Деталі замовлень по конкретному промокоду
+router.get('/stats/:storeId/:code', async (req, res) => {
+    try {
+        const orders = await PromoCodeOrder.getOrdersByCode(req.params.storeId, req.params.code);
+        res.json(orders);
+    } catch (error) {
+        console.error('Error fetching promo orders:', error);
+        res.status(500).json({ error: 'Failed to fetch promo orders' });
     }
 });
 

@@ -9,6 +9,7 @@ const GATrackingData = require("../models/GATrackingData");
 const InvoiceConnector = require('../models/InvoiceConnector');
 const Reference = require('../models/References');
 const PromoCode = require('../models/PromoCode');
+const PromoCodeOrder = require('../models/PromoCodeOrder');
 const router = express.Router();
 
 // Добавьте эту строку перед определением маршрутов
@@ -133,6 +134,19 @@ router.post('/order/create', async (req, res) => {
                     phone: customerData.phone,
                     discountApplied: promoData.discount_amount
                 });
+                await PromoCodeOrder.record({
+                    storeId,
+                    promoCode: promoData.code,
+                    promoCodeId: promoData.promoCodeId,
+                    orderId: result?.draftOrderComplete?.draftOrder?.order?.id || '',
+                    orderTotal: customerData.total?.[0] || 0,
+                    discountAmount: promoData.discount_amount,
+                    discountType: promoData.discount_type,
+                    customerName: `${customerData.firstName || ''} ${customerData.lastName || ''}`.trim(),
+                    customerEmail: customerData.email,
+                    customerPhone: customerData.phone,
+                    paymentMethod: 'cod',
+                });
             } catch (promoErr) {
                 console.error('Error recording promo usage:', promoErr);
             }
@@ -211,6 +225,7 @@ router.post('/payment', async (req, res) => {
         promoData: monoPromoData,
         marketingConsent: formData.marketingConsent || false,
         recoveryStep: formData.recoveryStep || null,
+        estimatedTotal: estimatedTotal || 0,
     })).toString('base64');
 
     const referenceId = await new Reference({ base64: reference }).save()
@@ -349,6 +364,19 @@ router.post('/payment/mono', async (req, res) => {
                         email: customerData.email,
                         phone: customerData.phone,
                         discountApplied: monoPromoData.discount_amount
+                    });
+                    await PromoCodeOrder.record({
+                        storeId: decodedReference.store_id,
+                        promoCode: monoPromoData.code,
+                        promoCodeId: monoPromoData.promoCodeId,
+                        orderId: createOrderResponse?.draftOrderComplete?.draftOrder?.order?.id || '',
+                        orderTotal: decodedReference.estimatedTotal || 0,
+                        discountAmount: monoPromoData.discount_amount,
+                        discountType: monoPromoData.discount_type,
+                        customerName: `${decodedReference.firstName || ''} ${decodedReference.lastName || ''}`.trim(),
+                        customerEmail: customerData.email,
+                        customerPhone: customerData.phone,
+                        paymentMethod: 'mono',
                     });
                 } catch (promoErr) {
                     console.error('Error recording promo usage (Mono):', promoErr);
@@ -567,7 +595,8 @@ router.post('/payment/hutko', async (req, res) => {
             connectorId: connector.id.toString(),
             promoData: promoData,
             marketingConsent: formData.marketingConsent || false,
-        recoveryStep: formData.recoveryStep || null,
+            recoveryStep: formData.recoveryStep || null,
+            estimatedTotal: estimatedTotal || 0,
         })).toString('base64');
 
         const referenceId = await new Reference({ base64: reference }).save();
@@ -751,6 +780,19 @@ router.post('/payment/hutko/callback', async (req, res) => {
                         email: customerData.email,
                         phone: customerData.phone,
                         discountApplied: refPromoData.discount_amount
+                    });
+                    await PromoCodeOrder.record({
+                        storeId: decodedReference.store_id,
+                        promoCode: refPromoData.code,
+                        promoCodeId: refPromoData.promoCodeId,
+                        orderId: createOrderResponse?.draftOrderComplete?.draftOrder?.order?.id || '',
+                        orderTotal: decodedReference.estimatedTotal || 0,
+                        discountAmount: refPromoData.discount_amount,
+                        discountType: refPromoData.discount_type,
+                        customerName: `${decodedReference.firstName || ''} ${decodedReference.lastName || ''}`.trim(),
+                        customerEmail: customerData.email,
+                        customerPhone: customerData.phone,
+                        paymentMethod: 'hutko',
                     });
                 } catch (promoErr) {
                     console.error('Error recording promo usage (Hutko):', promoErr);
