@@ -19,7 +19,13 @@ const reviewRoutes = require("./src/routes/reviews");
 // const redirectRoutes = require("./src/routes/redirect");
 const app = express();
 
-app.use(cors());
+app.use(cors({
+  origin: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+}));
+app.options('*', cors());
 app.use(express.json());
 
 app.use('/auth', authRoutes);
