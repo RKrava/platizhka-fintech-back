@@ -96,4 +96,59 @@ class PromoCodeOrder {
     }
 }
 
+    /**
+     * Public stats for a specific promo code (across all stores or by store)
+     */
+    static async getPublicStatsByCode(code, storeId) {
+        const query = storeId
+            ? `SELECT
+                    COUNT(*) as total_orders,
+                    COALESCE(SUM(order_total), 0) as total_revenue,
+                    COALESCE(SUM(discount_amount), 0) as total_discount,
+                    ROUND(COALESCE(AVG(order_total), 0)::numeric, 2) as avg_order,
+                    MIN(created_at) as first_order,
+                    MAX(created_at) as last_order
+               FROM promo_code_orders
+               WHERE promo_code = $1 AND store_id = $2`
+            : `SELECT
+                    COUNT(*) as total_orders,
+                    COALESCE(SUM(order_total), 0) as total_revenue,
+                    COALESCE(SUM(discount_amount), 0) as total_discount,
+                    ROUND(COALESCE(AVG(order_total), 0)::numeric, 2) as avg_order,
+                    MIN(created_at) as first_order,
+                    MAX(created_at) as last_order
+               FROM promo_code_orders
+               WHERE promo_code = $1`;
+        const params = storeId ? [code.toUpperCase(), storeId] : [code.toUpperCase()];
+        return new Promise((resolve, reject) => {
+            db.query(query, params, (err, result) => {
+                if (err) return reject(err);
+                resolve(result.rows[0] || null);
+            });
+        });
+    }
+
+    /**
+     * Public order list for a specific promo code (limited info)
+     */
+    static async getPublicOrdersByCode(code, storeId) {
+        const query = storeId
+            ? `SELECT order_total, discount_amount, payment_method, created_at
+               FROM promo_code_orders
+               WHERE promo_code = $1 AND store_id = $2
+               ORDER BY created_at DESC`
+            : `SELECT order_total, discount_amount, payment_method, created_at
+               FROM promo_code_orders
+               WHERE promo_code = $1
+               ORDER BY created_at DESC`;
+        const params = storeId ? [code.toUpperCase(), storeId] : [code.toUpperCase()];
+        return new Promise((resolve, reject) => {
+            db.query(query, params, (err, result) => {
+                if (err) return reject(err);
+                resolve(result.rows);
+            });
+        });
+    }
+}
+
 module.exports = PromoCodeOrder;

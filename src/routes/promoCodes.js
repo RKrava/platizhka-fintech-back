@@ -3,6 +3,20 @@ const router = express.Router();
 const PromoCode = require('../models/PromoCode');
 const PromoCodeOrder = require('../models/PromoCodeOrder');
 
+// Публічна статистика промокоду (для інфлюенсерів, без авторизації)
+router.get('/public/:code', async (req, res) => {
+    try {
+        const { store } = req.query;
+        const code = req.params.code;
+        const stats = await PromoCodeOrder.getPublicStatsByCode(code, store || null);
+        const orders = await PromoCodeOrder.getPublicOrdersByCode(code, store || null);
+        res.json({ code: code.toUpperCase(), stats, orders });
+    } catch (error) {
+        console.error('Error fetching public promo stats:', error);
+        res.status(500).json({ error: 'Failed to fetch stats' });
+    }
+});
+
 // Валидация промокода (фронтенд чекаут)
 router.post('/validate', async (req, res) => {
     try {
