@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS promo_code_orders (
     customer_email VARCHAR(255),
     customer_phone VARCHAR(50),
     payment_method VARCHAR(50),
+    cart_data TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 

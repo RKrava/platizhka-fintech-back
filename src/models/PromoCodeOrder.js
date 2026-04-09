@@ -4,14 +4,14 @@ class PromoCodeOrder {
     /**
      * Record an order that used a promo code
      */
-    static async record({ storeId, promoCode, promoCodeId, orderId, orderTotal, discountAmount, discountType, customerName, customerEmail, customerPhone, paymentMethod }) {
+    static async record({ storeId, promoCode, promoCodeId, orderId, orderTotal, discountAmount, discountType, customerName, customerEmail, customerPhone, paymentMethod, cartData }) {
         return new Promise((resolve, reject) => {
             db.query(
                 `INSERT INTO promo_code_orders
-                 (store_id, promo_code, promo_code_id, order_id, order_total, discount_amount, discount_type, customer_name, customer_email, customer_phone, payment_method)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                 (store_id, promo_code, promo_code_id, order_id, order_total, discount_amount, discount_type, customer_name, customer_email, customer_phone, payment_method, cart_data)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
                  RETURNING *`,
-                [storeId, promoCode, promoCodeId || null, orderId || null, orderTotal || 0, discountAmount || 0, discountType || null, customerName || null, customerEmail || null, customerPhone || null, paymentMethod || null],
+                [storeId, promoCode, promoCodeId || null, orderId || null, orderTotal || 0, discountAmount || 0, discountType || null, customerName || null, customerEmail || null, customerPhone || null, paymentMethod || null, cartData || null],
                 (err, result) => {
                     if (err) {
                         console.error('[PromoCodeOrder] Error recording:', err.message);
@@ -56,7 +56,7 @@ class PromoCodeOrder {
     static async getOrdersByCode(storeId, promoCode) {
         return new Promise((resolve, reject) => {
             db.query(
-                `SELECT * FROM promo_code_orders
+                `SELECT *, cart_data FROM promo_code_orders
                  WHERE store_id = $1 AND promo_code = $2
                  ORDER BY created_at DESC`,
                 [storeId, promoCode.toUpperCase()],
@@ -132,11 +132,11 @@ class PromoCodeOrder {
      */
     static async getPublicOrdersByCode(code, storeId) {
         const query = storeId
-            ? `SELECT order_total, discount_amount, payment_method, created_at
+            ? `SELECT order_total, discount_amount, payment_method, created_at, customer_name, cart_data
                FROM promo_code_orders
                WHERE promo_code = $1 AND store_id = $2
                ORDER BY created_at DESC`
-            : `SELECT order_total, discount_amount, payment_method, created_at
+            : `SELECT order_total, discount_amount, payment_method, created_at, customer_name, cart_data
                FROM promo_code_orders
                WHERE promo_code = $1
                ORDER BY created_at DESC`;

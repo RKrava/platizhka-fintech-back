@@ -115,6 +115,8 @@ router.post('/order/create', async (req, res) => {
         const cartId = req.body.cartId
         const storeId = req.body.storeId
         const promoData = req.body.promoData ? JSON.parse(req.body.promoData) : null
+        const reqOrderTotal = req.body.orderTotal || 0
+        const reqCartItems = req.body.cartItems || null
         const shop = await Shop.findById(req.body.storeId);
         const shopData = {
             apiSecretKey: shop.storefront_api_token,
@@ -139,13 +141,14 @@ router.post('/order/create', async (req, res) => {
                     promoCode: promoData.code,
                     promoCodeId: promoData.promoCodeId,
                     orderId: result?.draftOrderComplete?.draftOrder?.order?.id || '',
-                    orderTotal: customerData.total?.[0] || 0,
+                    orderTotal: reqOrderTotal,
                     discountAmount: promoData.discount_amount,
                     discountType: promoData.discount_type,
                     customerName: `${customerData.firstName || ''} ${customerData.lastName || ''}`.trim(),
                     customerEmail: customerData.email,
-                    customerPhone: customerData.phone,
+                    customerPhone: customerData.phone || customerData.tel,
                     paymentMethod: 'cod',
+                    cartData: reqCartItems,
                 });
             } catch (promoErr) {
                 console.error('Error recording promo usage:', promoErr);
@@ -226,6 +229,7 @@ router.post('/payment', async (req, res) => {
         marketingConsent: formData.marketingConsent || false,
         recoveryStep: formData.recoveryStep || null,
         estimatedTotal: estimatedTotal || 0,
+        cartDataSummary: cartData ? JSON.stringify(cartData.map(i => ({ title: i.title, count: i.count, price: i.price, image: i.image }))) : null,
     })).toString('base64');
 
     const referenceId = await new Reference({ base64: reference }).save()
@@ -377,6 +381,7 @@ router.post('/payment/mono', async (req, res) => {
                         customerEmail: customerData.email,
                         customerPhone: customerData.phone,
                         paymentMethod: 'mono',
+                        cartData: decodedReference.cartDataSummary || null,
                     });
                 } catch (promoErr) {
                     console.error('Error recording promo usage (Mono):', promoErr);
@@ -597,6 +602,7 @@ router.post('/payment/hutko', async (req, res) => {
             marketingConsent: formData.marketingConsent || false,
             recoveryStep: formData.recoveryStep || null,
             estimatedTotal: estimatedTotal || 0,
+            cartDataSummary: cartData ? JSON.stringify(cartData.map(i => ({ title: i.title, count: i.count, price: i.price, image: i.image }))) : null,
         })).toString('base64');
 
         const referenceId = await new Reference({ base64: reference }).save();
@@ -793,6 +799,7 @@ router.post('/payment/hutko/callback', async (req, res) => {
                         customerEmail: customerData.email,
                         customerPhone: customerData.phone,
                         paymentMethod: 'hutko',
+                        cartData: decodedReference.cartDataSummary || null,
                     });
                 } catch (promoErr) {
                     console.error('Error recording promo usage (Hutko):', promoErr);
