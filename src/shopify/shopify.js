@@ -287,6 +287,10 @@ const createOrder = async (cartId, customerData, pendingPayment, storeId, shopDa
         discountCode: discountCode,
     };
 
+    // Інфо про провайдера доставки. Фронт може передавати у customerData:
+    //   deliveryProvider: 'nova-poshta' | 'rozetka'
+    //   deliveryCityRef, deliveryWarehouseRef (UUID)
+    //   deliveryCityName, deliveryWarehouseName
     const orderRecord = await new Order({
         firstName: customerData.firstName,
         lastName: customerData.lastName,
@@ -298,7 +302,12 @@ const createOrder = async (cartId, customerData, pendingPayment, storeId, shopDa
         country: customerData.address.country,
         store_id: Number(storeId),
         checkoutData: JSON.stringify(checkoutData),
-        paymentMethod: customerData.payment || null
+        paymentMethod: customerData.payment || null,
+        deliveryProvider: customerData.deliveryProvider || null,
+        deliveryCityRef: customerData.deliveryCityRef || null,
+        deliveryWarehouseRef: customerData.deliveryWarehouseRef || null,
+        deliveryCityName: customerData.deliveryCityName || null,
+        deliveryWarehouseName: customerData.deliveryWarehouseName || null,
     }).save()
 
     let draftOrderData
