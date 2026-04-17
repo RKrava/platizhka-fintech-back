@@ -225,6 +225,12 @@ router.post('/payment', async (req, res) => {
         comment: formData.comment,
         warehouse: formData.warehouse,
         city: formData.city,
+        // Delivery provider info (для orders.delivery_* колонок + KeyCRM)
+        deliveryProvider: formData.deliveryProvider || null,
+        deliveryCityRef: formData.deliveryCityRef || null,
+        deliveryWarehouseRef: formData.deliveryWarehouseRef || null,
+        deliveryCityName: formData.deliveryCityName || null,
+        deliveryWarehouseName: formData.deliveryWarehouseName || null,
         store_id: Number(storeId),
         connectorId: connector.id.toString(),
         promoData: monoPromoData,
@@ -329,7 +335,13 @@ router.post('/payment/mono', async (req, res) => {
         },
         payment: 'Monopay',
         marketingConsent: decodedReference.marketingConsent !== undefined ? decodedReference.marketingConsent : true,
-        recoveryStep: decodedReference.recoveryStep || null
+        recoveryStep: decodedReference.recoveryStep || null,
+        // Delivery provider → буде записано в orders.delivery_*
+        deliveryProvider: decodedReference.deliveryProvider || null,
+        deliveryCityRef: decodedReference.deliveryCityRef || null,
+        deliveryWarehouseRef: decodedReference.deliveryWarehouseRef || null,
+        deliveryCityName: decodedReference.deliveryCityName || null,
+        deliveryWarehouseName: decodedReference.deliveryWarehouseName || null,
     }
 
     // Проверка статуса платежа
@@ -598,6 +610,12 @@ router.post('/payment/hutko', async (req, res) => {
             comment: formData.comment,
             warehouse: formData.warehouse,
             city: formData.city,
+            // Delivery provider info
+            deliveryProvider: formData.deliveryProvider || null,
+            deliveryCityRef: formData.deliveryCityRef || null,
+            deliveryWarehouseRef: formData.deliveryWarehouseRef || null,
+            deliveryCityName: formData.deliveryCityName || null,
+            deliveryWarehouseName: formData.deliveryWarehouseName || null,
             store_id: Number(storeId),
             connectorId: connector.id.toString(),
             promoData: promoData,
@@ -757,7 +775,12 @@ router.post('/payment/hutko/callback', async (req, res) => {
                 },
                 payment: 'Hutko',
                 marketingConsent: decodedReference.marketingConsent !== undefined ? decodedReference.marketingConsent : true,
-        recoveryStep: decodedReference.recoveryStep || null
+                recoveryStep: decodedReference.recoveryStep || null,
+                deliveryProvider: decodedReference.deliveryProvider || null,
+                deliveryCityRef: decodedReference.deliveryCityRef || null,
+                deliveryWarehouseRef: decodedReference.deliveryWarehouseRef || null,
+                deliveryCityName: decodedReference.deliveryCityName || null,
+                deliveryWarehouseName: decodedReference.deliveryWarehouseName || null,
             };
 
             const storeId = invoice.storeid;
