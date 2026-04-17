@@ -10,6 +10,25 @@ const DEFAULT_STEP1_MINUTES = 30;
 const DEFAULT_STEP2_MINUTES = 1440;  // 24 год
 const DEFAULT_STEP3_MINUTES = 2880;  // 48 год після step 2
 
+// Дозволений проміжок відправки (година за Києвом, 0..23)
+// Дефолт: з 9:00 до 22:00 (відправляємо якщо hour >= QUIET_END і hour < QUIET_START)
+const QUIET_START = parseInt(process.env.NOTIF_QUIET_START_HOUR || '22', 10); // з 22:00 — тиша
+const QUIET_END = parseInt(process.env.NOTIF_QUIET_END_HOUR || '9', 10);       // до 9:00 — тиша
+
+function isQuietHours(date = new Date()) {
+    // Час у часовому поясі Києва (Europe/Kyiv = UTC+2 або UTC+3 взимку/влітку)
+    const kyivHourStr = date.toLocaleString('en-US', { timeZone: 'Europe/Kyiv', hour: '2-digit', hour12: false });
+    const hour = parseInt(kyivHourStr, 10);
+    if (isNaN(hour)) return false;
+    // "Тихі години" — коли НЕ слати
+    if (QUIET_START > QUIET_END) {
+        // нормальний випадок: 22..23 або 0..8 → тиша
+        return hour >= QUIET_START || hour < QUIET_END;
+    }
+    // якщо someone inverted — QUIET_START < QUIET_END, тиша між ними
+    return hour >= QUIET_START && hour < QUIET_END;
+}
+
 // URL сервісу коротких посилань (brikl.ink)
 const SHORT_LINK_API = process.env.SHORT_LINK_API; // https://brikl.ink/api/create
 const SHORT_LINK_TOKEN = process.env.SHORT_LINK_TOKEN;
@@ -185,6 +204,12 @@ async function processStore(shop) {
 
 async function processAbandonedCarts() {
     try {
+        // Нічна тиша: не надсилаємо повідомлення поза дозволеним проміжком (за Києвом)
+        if (isQuietHours()) {
+            console.log(`[Notifier] Skipped — quiet hours (Kyiv). Дозволено з ${QUIET_END}:00 до ${QUIET_START}:00.`);
+            return;
+        }
+
         // Отримуємо всі магазини з увімкненими нотифікаціями
         const shops = await Shop.findAll ? await Shop.findAll() : [];
 
