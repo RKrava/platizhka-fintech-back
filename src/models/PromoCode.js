@@ -1,5 +1,20 @@
 const db = require('../config/db');
 
+// Гарантуємо наявність колонки code_type (manual | system)
+let schemaPromise = null;
+async function ensureSchema() {
+    if (schemaPromise) return schemaPromise;
+    schemaPromise = (async () => {
+        try {
+            await db.query(`ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS code_type VARCHAR(20) DEFAULT 'manual'`);
+        } catch (e) {
+            console.error('PromoCode schema migration error:', e.message);
+        }
+    })();
+    return schemaPromise;
+}
+ensureSchema();
+
 class PromoCode {
     constructor(data) {
         this.id = data.id;
@@ -14,16 +29,19 @@ class PromoCode {
         this.starts_at = data.starts_at;
         this.expires_at = data.expires_at;
         this.created_at = data.created_at;
+        // manual = створений вручну менеджером, system = згенерований автоматично
+        this.code_type = data.code_type || 'manual';
     }
 
     async save() {
+        await ensureSchema();
         return new Promise((resolve, reject) => {
             db.query(
-                `INSERT INTO promo_codes (store_id, code, discount_type, discount_value, min_order_amount, max_uses, active, starts_at, expires_at)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                `INSERT INTO promo_codes (store_id, code, discount_type, discount_value, min_order_amount, max_uses, active, starts_at, expires_at, code_type)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
                  RETURNING *`,
                 [this.store_id, this.code.toUpperCase(), this.discount_type, this.discount_value,
-                 this.min_order_amount, this.max_uses, this.active, this.starts_at, this.expires_at],
+                 this.min_order_amount, this.max_uses, this.active, this.starts_at, this.expires_at, this.code_type || 'manual'],
                 (err, result) => {
                     if (err) return reject(err);
                     resolve(new PromoCode(result.rows[0]));
@@ -73,7 +91,7 @@ class PromoCode {
         let paramIndex = 1;
 
         const allowedFields = ['code', 'discount_type', 'discount_value', 'min_order_amount',
-                               'max_uses', 'active', 'starts_at', 'expires_at'];
+                               'max_uses', 'active', 'starts_at', 'expires_at', 'code_type'];
 
         for (const field of allowedFields) {
             if (data[field] !== undefined) {

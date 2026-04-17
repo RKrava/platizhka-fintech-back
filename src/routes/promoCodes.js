@@ -97,7 +97,7 @@ router.get('/:storeId', async (req, res) => {
 // Создать промокод
 router.post('/', async (req, res) => {
     try {
-        const { store_id, code, discount_type, discount_value, min_order_amount, max_uses, active, starts_at, expires_at } = req.body;
+        const { store_id, code, discount_type, discount_value, min_order_amount, max_uses, active, starts_at, expires_at, code_type } = req.body;
 
         if (!store_id || !code || !discount_type) {
             return res.status(400).json({ error: 'store_id, code, discount_type обов\'язкові' });
@@ -105,6 +105,10 @@ router.post('/', async (req, res) => {
 
         if (!['percentage', 'fixed_amount', 'free_delivery'].includes(discount_type)) {
             return res.status(400).json({ error: 'discount_type має бути: percentage, fixed_amount або free_delivery' });
+        }
+
+        if (code_type && !['manual', 'system'].includes(code_type)) {
+            return res.status(400).json({ error: 'code_type має бути: manual або system' });
         }
 
         const promo = new PromoCode({
@@ -117,6 +121,7 @@ router.post('/', async (req, res) => {
             active: active !== undefined ? active : true,
             starts_at: starts_at || new Date(),
             expires_at: expires_at || null,
+            code_type: code_type || 'manual',
         });
 
         const saved = await promo.save();
