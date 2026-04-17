@@ -123,7 +123,9 @@ router.post('/order/create', async (req, res) => {
             hostName: shop.shopify_url,
             adminApiAccessToken: shop.admin_api_token
         };
-        customerData.payment = 'Накладений платіж'
+        // payment може бути переданий з фронта (напр. 'Накладений платіж' / 'Карткою'),
+        // дефолт — 'Накладений платіж' (цей ендпоінт використовується для COD-потоку)
+        customerData.payment = customerData.payment || 'Накладений платіж'
         const result = await createOrder(cartId, customerData, true, storeId, shopData, promoData)
 
         // Record promo code usage

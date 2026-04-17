@@ -287,7 +287,7 @@ const createOrder = async (cartId, customerData, pendingPayment, storeId, shopDa
         discountCode: discountCode,
     };
 
-    await new Order({
+    const orderRecord = await new Order({
         firstName: customerData.firstName,
         lastName: customerData.lastName,
         phone: customerData.phone,
@@ -297,13 +297,22 @@ const createOrder = async (cartId, customerData, pendingPayment, storeId, shopDa
         city: customerData.address.city,
         country: customerData.address.country,
         store_id: Number(storeId),
-        checkoutData: JSON.stringify(checkoutData)
+        checkoutData: JSON.stringify(checkoutData),
+        paymentMethod: customerData.payment || null
     }).save()
 
-    const draftOrderData = await createDraftOrder(customerData, checkoutData, storeId, shopData)
+    let draftOrderData
+    try {
+        draftOrderData = await createDraftOrder(customerData, checkoutData, storeId, shopData)
+    } catch (e) {
+        const errMsg = e?.message || String(e)
+        await orderRecord.updateShopifyResult({ shopifyError: `Draft order create threw: ${errMsg}` }).catch(() => {})
+        throw e
+    }
 
     if (draftOrderData.body.data.draftOrderCreate.userErrors.length > 0) {
         console.log(draftOrderData.body.data.draftOrderCreate.userErrors)
+        const userErrorsStr = JSON.stringify(draftOrderData.body.data.draftOrderCreate.userErrors)
         const errorMessage = `❌ Order Creation Error:
 Store ID: ${storeId}
 Customer: ${customerData.firstName} ${customerData.lastName}
@@ -314,17 +323,27 @@ City: ${customerData.address.city}
 Country: ${customerData.address.country}
 checkoutData: ${JSON.stringify(checkoutData)}
 note: ${customerData.note}
-Errors: ${JSON.stringify(draftOrderData.body.data.draftOrderCreate.userErrors)}`;
+Errors: ${userErrorsStr}`;
         await sendTelegramMessage(errorMessage, '-567427708');
+        await orderRecord.updateShopifyResult({ shopifyError: userErrorsStr }).catch(() => {})
         return { userErrors: draftOrderData.body.data.draftOrderCreate.userErrors }
     }
 
-    const completeOrderData = await completeDraftOrder(draftOrderData.body.data.draftOrderCreate.draftOrder.id,
-        pendingPayment, storeId, shopData)
+    let completeOrderData
+    try {
+        completeOrderData = await completeDraftOrder(draftOrderData.body.data.draftOrderCreate.draftOrder.id,
+            pendingPayment, storeId, shopData)
+    } catch (e) {
+        const errMsg = e?.message || String(e)
+        await orderRecord.updateShopifyResult({ shopifyError: `Draft order complete threw: ${errMsg}` }).catch(() => {})
+        throw e
+    }
     
     // After order is completed, update discount codes, customer marketing, and send notifications
     if (completeOrderData.body.data.draftOrderComplete.draftOrder.order.id) {
       const orderId = completeOrderData.body.data.draftOrderComplete.draftOrder.order.id.split('/').pop();
+      // Записуємо shopify_order_id для зв'язку і очищуємо попередні помилки
+      await orderRecord.updateShopifyResult({ shopifyOrderId: String(orderId), shopifyError: null }).catch(() => {})
       try {
           // If there's a discount code, attach it to the order so Shopify tracks usage
           if (checkoutData.discountCode && checkoutData.appliedDiscount) {
