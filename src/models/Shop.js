@@ -45,6 +45,11 @@ class Shop {
     this.turbosms_token = row.turbosms_token;
     this.turbosms_sender = row.turbosms_sender;
     this.abandoned_promo_code = row.abandoned_promo_code;
+    // Step 3 urgent promo — bigger discount (e.g. 20%) with a short
+    // validity window, used as the "last chance" nudge. Falls back to
+    // abandoned_promo_code when unset.
+    this.abandoned_promo_urgent_code = row.abandoned_promo_urgent_code;
+    this.abandoned_promo_urgent_percent = row.abandoned_promo_urgent_percent;
     this.abandoned_notifications_enabled = row.abandoned_notifications_enabled;
     this.smtp_host = row.smtp_host;
     this.smtp_port = row.smtp_port;

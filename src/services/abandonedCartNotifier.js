@@ -84,6 +84,11 @@ async function processStore(shop) {
     const sender = shop.turbosms_sender;
     const turboToken = shop.turbosms_token || process.env.TURBOSMS_TOKEN;
     const promoCode = shop.abandoned_promo_code;
+    // Urgent promo (step 3) — bigger discount, shorter validity. Falls
+    // back to the regular promo code when unset so legacy shops keep
+    // working without changes.
+    const urgentPromoCode = shop.abandoned_promo_urgent_code || promoCode;
+    const urgentPromoPercent = shop.abandoned_promo_urgent_percent || null;
     const storeName = shop.domain_url || shop.name || '';
 
     // Таймінги з налаштувань магазину (хвилини → мілісекунди)
@@ -177,21 +182,42 @@ async function processStore(shop) {
                 }
             }
 
-            // ===== STEP 3: Знижка (72 год) =====
+            // ===== STEP 3: Остання знижка — терміново! =====
+            // Bigger discount, only valid 24h — last chance messaging.
             // Канал: phone → Viber/SMS, тільки email → Email
             if (lastStep === 2 && (now - lastSentAt) >= STEP3_DELAY) {
-                const link = await createShortRecoveryLink(storeName, checkout.recovery_token, promoCode, 3, storeId, checkout.id);
-                const discount = promoCode ? ` зі знижкою (промокод ${promoCode})` : '';
+                const link = await createShortRecoveryLink(storeName, checkout.recovery_token, urgentPromoCode, 3, storeId, checkout.id);
+                // Percent tag is inlined into the copy when the shop
+                // configured it, otherwise fall back to a generic
+                // "special discount" phrase.
+                const pctTag = urgentPromoPercent ? `-${urgentPromoPercent}%` : 'спеціальна знижка';
+                const promoTag = urgentPromoCode ? ` (промокод ${urgentPromoCode})` : '';
 
                 if (hasPhone) {
-                    const viberText = `Спеціально для вас! Завершіть замовлення${discount}: ${link}`;
-                    const smsText = `Знижка на ваше замовлення${discount}! ${link}`;
+                    const viberText =
+                        `🔥 ОСТАННІЙ ШАНС! ${pctTag} на ваше замовлення${promoTag}. ` +
+                        `Діє ТІЛЬКИ 24 години — не проґавте: ${link}`;
+                    const smsText =
+                        `🔥 Остання знижка ${pctTag}${promoTag}! Тільки 24 год: ${link}`;
                     const result = await sendViberWithSmsFallback(checkout.phone, viberText, smsText, sender, turboToken);
                     await NotificationLog.save({ abandonedCheckoutId: checkout.id, storeId, step: 3, channel: 'viber_sms', recipient: checkout.phone, messageId: result.messageId });
                     console.log(`[Notifier] Step 3 viber/sms → ${checkout.phone} (checkout #${checkout.id})`);
                 } else if (canEmail) {
                     const cartItems = parseCartItems(checkout.cart_data);
-                    const result = await sendAbandonedCartEmail({ email: checkout.email, firstName: checkout.first_name, cartItems, recoveryLink: link, storeName: storeName.replace(/^https?:\/\//, ''), smtpConfig });
+                    const result = await sendAbandonedCartEmail({
+                        email: checkout.email,
+                        firstName: checkout.first_name,
+                        cartItems,
+                        recoveryLink: link,
+                        storeName: storeName.replace(/^https?:\/\//, ''),
+                        smtpConfig,
+                        // Step-3 specific subject/intro hooks used by the
+                        // abandoned-cart template when step === 3 to add
+                        // urgency copy to the email.
+                        step: 3,
+                        promoCode: urgentPromoCode,
+                        promoPercent: urgentPromoPercent,
+                    });
                     await NotificationLog.save({ abandonedCheckoutId: checkout.id, storeId, step: 3, channel: 'email', recipient: checkout.email, messageId: result.messageId });
                     console.log(`[Notifier] Step 3 email → ${checkout.email} (checkout #${checkout.id})`);
                 }

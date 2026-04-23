@@ -20,11 +20,25 @@ function getTransporter(smtpConfig) {
     return transporterCache[key];
 }
 
-function buildAbandonedCartHtml({ firstName, cartItems, recoveryLink, storeName }) {
+function buildAbandonedCartHtml({ firstName, cartItems, recoveryLink, storeName, step, promoCode, promoPercent }) {
     const hasProducts = cartItems.length > 0 && cartItems.some(i => i.title);
     const total = cartItems.reduce((sum, item) => sum + (parseFloat(item.price || 0) * (item.quantity || 1)), 0);
     const greeting = firstName ? `${firstName}, ви` : 'Ви';
     const displayName = storeName || 'Магазин';
+
+    // Step 3 urgency banner — shown only on the "last chance" email
+    const isUrgent = step === 3;
+    const pctLabel = promoPercent ? `-${promoPercent}%` : 'Велика знижка';
+    const urgentBanner = isUrgent ? `
+        <div style="background:#fff3cd;border-left:4px solid #E42C0B;padding:14px 18px;margin:0 0 20px;border-radius:8px;">
+            <div style="color:#E42C0B;font-weight:700;font-size:15px;margin-bottom:4px;font-family:'Rubik',sans-serif;">
+                🔥 Останній шанс — тільки 24 години!
+            </div>
+            <div style="color:#5c3a00;font-size:14px;font-family:'Rubik',sans-serif;">
+                ${pctLabel} на ваше замовлення${promoCode ? ` з промокодом <b>${promoCode}</b>` : ''}. Пропозиція діє лише сьогодні.
+            </div>
+        </div>
+    ` : '';
 
     const productsSection = hasProducts ? `
             <h3 style="color:#333;font-size:16px;margin:0 0 16px;font-family:'Rubik',sans-serif;font-weight:600;padding-bottom:8px;border-bottom:2px solid #FA5800;display:inline-block;">
@@ -86,8 +100,9 @@ function buildAbandonedCartHtml({ firstName, cartItems, recoveryLink, storeName 
 
         <!-- Content -->
         <div class="content" style="padding:40px 30px;background:#fff;">
+            ${urgentBanner}
             <h2 style="color:#E42C0B;font-size:22px;margin:0 0 12px;text-align:center;font-weight:600;font-family:'Rubik',sans-serif;">
-                ${greeting} не завершили замовлення
+                ${isUrgent ? (firstName ? `${firstName}, не проґавте шанс!` : 'Не проґавте шанс!') : `${greeting} не завершили замовлення`}
             </h2>
             <p style="color:#555;font-size:15px;line-height:1.7;text-align:center;margin:0 0 28px;font-family:'Rubik',sans-serif;">
                 ${hasProducts ? 'Ваші товари ще чекають на вас.' : 'Ви почали оформлення, але не завершили.'} Завершіть — це займе лише хвилину!
@@ -127,7 +142,7 @@ function buildAbandonedCartHtml({ firstName, cartItems, recoveryLink, storeName 
 </html>`;
 }
 
-async function sendAbandonedCartEmail({ email, firstName, cartItems, recoveryLink, storeName, smtpConfig }) {
+async function sendAbandonedCartEmail({ email, firstName, cartItems, recoveryLink, storeName, smtpConfig, step, promoCode, promoPercent }) {
     const transport = getTransporter(smtpConfig);
     if (!transport) {
         console.error('[Email] SMTP not configured');
@@ -135,17 +150,25 @@ async function sendAbandonedCartEmail({ email, firstName, cartItems, recoveryLin
     }
 
     try {
-        const html = buildAbandonedCartHtml({ firstName, cartItems, recoveryLink, storeName });
+        const html = buildAbandonedCartHtml({ firstName, cartItems, recoveryLink, storeName, step, promoCode, promoPercent });
         const fromEmail = smtpConfig?.from || process.env.SMTP_FROM || 'noreply@platizhka.com';
         const fromName = storeName || 'Магазин';
         const from = `"${fromName}" <${fromEmail}>`;
 
+        // Step-3 gets an urgency-forward subject line; other steps keep
+        // the original copy.
+        const subject = step === 3
+            ? (firstName
+                ? `🔥 ${firstName}, остання знижка — тільки 24 год!`
+                : `🔥 Остання знижка — тільки 24 год!`)
+            : (firstName
+                ? `${firstName}, ваші товари ще чекають на вас 🛒`
+                : `Ви забули щось у кошику 🛒`);
+
         const info = await transport.sendMail({
             from,
             to: email,
-            subject: firstName
-                ? `${firstName}, ваші товари ще чекають на вас 🛒`
-                : `Ви забули щось у кошику 🛒`,
+            subject,
             html
         });
 
