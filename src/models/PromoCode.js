@@ -51,10 +51,14 @@ class PromoCode {
     }
 
     static async findByCode(storeId, code) {
+        // Trim + uppercase — users copy-paste from email/SMS and often
+        // drag in leading/trailing whitespace. All our inserted codes
+        // are stored uppercase already.
+        const normalized = String(code || '').trim().toUpperCase();
         return new Promise((resolve, reject) => {
             db.query(
                 'SELECT * FROM promo_codes WHERE store_id = $1 AND code = $2',
-                [storeId, code.toUpperCase()],
+                [storeId, normalized],
                 (err, result) => {
                     if (err) return reject(err);
                     resolve(result.rows[0] ? new PromoCode(result.rows[0]) : null);
