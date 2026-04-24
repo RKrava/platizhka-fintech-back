@@ -79,6 +79,42 @@ function parseCartItems(cartDataStr) {
     }
 }
 
+// Mint a unique single-use promo code with a 24-hour expiry, used by
+// the Step-3 "last chance" message. Each customer gets their own code,
+// so the deadline is genuinely personal (expiring 24h from when we
+// actually send) rather than a shared static code. Returns the code
+// string on success or null if we can't mint (no %, repeated UNIQUE
+// collisions, or a DB error).
+async function mintUrgentPromoCode(storeId, percent, hoursValid = 24) {
+    if (!percent || percent < 1 || percent > 99) return null;
+    const db = require('../config/db');
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const expiresAt = new Date(Date.now() + hoursValid * 60 * 60 * 1000).toISOString();
+
+    for (let attempt = 0; attempt < 4; attempt++) {
+        let tail = '';
+        for (let i = 0; i < 8; i++) tail += alphabet[Math.floor(Math.random() * alphabet.length)];
+        const code = `RUSH-${tail}`;
+        try {
+            const res = await db.query(
+                `INSERT INTO promo_codes
+                    (store_id, code, discount_type, discount_value, min_order_amount,
+                     max_uses, used_count, active, code_type, starts_at, expires_at)
+                 VALUES ($1, $2, 'percentage', $3, 0, 1, 0, true, 'system', NOW(), $4)
+                 RETURNING code`,
+                [storeId, code, percent, expiresAt]
+            );
+            if (res.rows[0]) return res.rows[0].code;
+        } catch (err) {
+            // 23505 = unique_violation on (store_id, code) — try another random tail
+            if (err.code === '23505') continue;
+            console.error('[mintUrgentPromoCode] insert error:', err.message);
+            return null;
+        }
+    }
+    return null;
+}
+
 async function processStore(shop) {
     const storeId = shop.id;
     const sender = shop.turbosms_sender;
@@ -186,12 +222,26 @@ async function processStore(shop) {
             // Bigger discount, only valid 24h — last chance messaging.
             // Канал: phone → Viber/SMS, тільки email → Email
             if (lastStep === 2 && (now - lastSentAt) >= STEP3_DELAY) {
-                const link = await createShortRecoveryLink(storeName, checkout.recovery_token, urgentPromoCode, 3, storeId, checkout.id);
+                // If the shop configured a discount percent, mint a
+                // unique single-use code per customer with a 24h expiry
+                // instead of re-using the same static code. Falls back
+                // to the static `urgent_code` and finally the generic
+                // `abandoned_promo_code` so legacy setups keep working.
+                let step3Code = null;
+                if (urgentPromoPercent) {
+                    step3Code = await mintUrgentPromoCode(storeId, urgentPromoPercent, 24);
+                    if (!step3Code) console.warn(`[Notifier] mintUrgentPromoCode failed for checkout #${checkout.id}, falling back`);
+                }
+                if (!step3Code) step3Code = shop.abandoned_promo_urgent_code || promoCode;
+
+                const link = await createShortRecoveryLink(storeName, checkout.recovery_token, step3Code, 3, storeId, checkout.id);
                 // Percent tag is inlined into the copy when the shop
                 // configured it, otherwise fall back to a generic
                 // "special discount" phrase.
                 const pctTag = urgentPromoPercent ? `-${urgentPromoPercent}%` : 'спеціальна знижка';
-                const promoTag = urgentPromoCode ? ` (промокод ${urgentPromoCode})` : '';
+                const promoTag = step3Code ? ` (промокод ${step3Code})` : '';
+                // Alias for the email text/log so we don't refactor every reference
+                const urgentPromoCodeFinal = step3Code;
 
                 if (hasPhone) {
                     const viberText =
@@ -215,10 +265,10 @@ async function processStore(shop) {
                         // abandoned-cart template when step === 3 to add
                         // urgency copy to the email.
                         step: 3,
-                        promoCode: urgentPromoCode,
+                        promoCode: urgentPromoCodeFinal,
                         promoPercent: urgentPromoPercent,
                     });
-                    await NotificationLog.save({ abandonedCheckoutId: checkout.id, storeId, step: 3, channel: 'email', recipient: checkout.email, messageId: result.messageId, messageText: `🔥 Остання знижка ${urgentPromoPercent ? `-${urgentPromoPercent}%` : ''} (${urgentPromoCode || '—'}) — email, 24 год` });
+                    await NotificationLog.save({ abandonedCheckoutId: checkout.id, storeId, step: 3, channel: 'email', recipient: checkout.email, messageId: result.messageId, messageText: `🔥 Остання знижка ${urgentPromoPercent ? `-${urgentPromoPercent}%` : ''} (${urgentPromoCodeFinal || '—'}) — email, 24 год` });
                     console.log(`[Notifier] Step 3 email → ${checkout.email} (checkout #${checkout.id})`);
                 }
             }
