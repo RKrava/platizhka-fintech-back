@@ -66,10 +66,6 @@ function buildAbandonedCartHtml({ firstName, cartItems, recoveryLink, storeName,
                 </tr>`).join('')}
                 ${total > 0 ? `
                 <tr>
-                    <td colspan="3" style="padding:16px;text-align:right;font-size:14px;color:#666;border-bottom:none;background:#fff;">Доставка:</td>
-                    <td style="padding:16px;text-align:right;font-size:14px;color:#666;border-bottom:none;background:#fff;">За тарифами НП</td>
-                </tr>
-                <tr>
                     <td colspan="3" style="padding:18px 16px;text-align:right;font-size:18px;font-weight:600;color:#fff;background:#FA5800;border-bottom:none;">Разом:</td>
                     <td style="padding:18px 16px;text-align:right;font-size:18px;font-weight:600;color:#fff;background:#FA5800;border-bottom:none;">${total.toFixed(0)} &#8372;</td>
                 </tr>` : ''}
