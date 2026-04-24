@@ -1,12 +1,27 @@
 const db = require('../config/db');
 
 class NotificationLog {
-    static async save({ abandonedCheckoutId, storeId, step, channel, recipient, messageId }) {
+    static async save({ abandonedCheckoutId, storeId, step, channel, recipient, messageId, messageText, source, reviewId, errorText }) {
         const result = await db.query(
-            `INSERT INTO notification_log (abandoned_checkout_id, store_id, step, channel, recipient, message_id)
-             VALUES ($1, $2, $3, $4, $5, $6)
+            `INSERT INTO notification_log
+                (abandoned_checkout_id, store_id, step, channel, recipient, message_id,
+                 message_text, source, review_id, error_text,
+                 status)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
              RETURNING id`,
-            [abandonedCheckoutId, storeId, step, channel, recipient, messageId || null]
+            [
+                abandonedCheckoutId || null,
+                storeId,
+                step,
+                channel,
+                recipient,
+                messageId || null,
+                messageText || null,
+                source || 'abandoned',
+                reviewId || null,
+                errorText || null,
+                errorText ? 'failed' : 'sent',
+            ]
         );
         return result.rows[0];
     }
