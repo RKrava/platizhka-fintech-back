@@ -5,12 +5,15 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "build": "webpack --mode=production"
+    "dev": "node --watch index.js",
+    "build": "webpack --mode=production",
+    "test": "node --test tests/"
   },
   "dependencies": {
     "@hutko/js-sdk": "^2.0.5",
     "@shopify/shopify-api": "^11.3.0",
     "@shopify/storefront-api-client": "^1.0.1",
+    "@supabase/supabase-js": "^2.104.1",
     "axios": "^1.7.7",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
