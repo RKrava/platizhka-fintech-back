@@ -165,14 +165,31 @@ router.get('/cart', async (req, res) => {
         } catch (shopifyError) {
             if (!isStorefrontForbidden(shopifyError)) throw shopifyError;
 
+            // Log the actual Shopify error details to help diagnose scope issues
+            const shopifyBody = shopifyError?.response?.body;
+            const shopifyErrors = shopifyBody?.errors;
+            console.warn(
+                `Storefront 403 for store ${storeId}. Shopify errors:`,
+                JSON.stringify(shopifyErrors ?? shopifyBody ?? shopifyError?.message),
+            );
+
             // Storefront token is invalid — clear it and retry with a fresh one
-            console.warn(`Storefront 403 for store ${storeId}, refreshing token and retrying`);
             await Shop.updateColumns(shop.id, { storefront_api_token: null });
             clearStorefrontCache(storeId);
 
             shop = await Shop.findById(storeId);
             shopData = await buildShopifyData(shop);
-            res.json(await getCartShopify(req.query.cartid, storeId, shopData));
+            try {
+                res.json(await getCartShopify(req.query.cartid, storeId, shopData));
+            } catch (retryError) {
+                const retryBody = retryError?.response?.body;
+                console.error(
+                    `Storefront 403 persists after token refresh for store ${storeId}. ` +
+                    `Likely a scope/permissions issue. Shopify errors:`,
+                    JSON.stringify(retryBody?.errors ?? retryBody ?? retryError?.message),
+                );
+                throw retryError;
+            }
         }
     } catch (error) {
         console.error('Shopify request error:', error);
