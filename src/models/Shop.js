@@ -37,6 +37,8 @@ class Shop {
     this.storefront_api_token = row.storefront_api_token;
     this.success_page_config = row.success_page_config;
     this.cart_page_config = row.cart_page_config;
+    this.settings = row.settings;
+    this.status = row.status || 'active';
     this.mono_token = row.mono_token;
     this.mono_checkout_token = row.mono_checkout_token;
     this.hutko_merchant_id = row.hutko_merchant_id;
@@ -73,14 +75,26 @@ class Shop {
       admin_api_token, 
       storefront_api_token, 
       success_page_config = defaultSuccessPageConfig, 
-      cart_page_config = defaultCartPageConfig 
+      cart_page_config = defaultCartPageConfig,
+      settings
     } = shopData;
 
     return new Promise((resolve, reject) => {
       db.query(
-        `INSERT INTO shops (user_id, name, description, shopify_url, domain_url, admin_api_token, storefront_api_token, success_page_config, cart_page_config) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
-        [user_id, name, description, shopify_url, domain_url, admin_api_token, storefront_api_token, JSON.stringify(success_page_config), JSON.stringify(cart_page_config)],
+        `INSERT INTO shops (user_id, name, description, shopify_url, domain_url, admin_api_token, storefront_api_token, success_page_config, cart_page_config, settings) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
+        [
+          user_id,
+          name,
+          description,
+          shopify_url,
+          domain_url,
+          admin_api_token,
+          storefront_api_token,
+          JSON.stringify(success_page_config),
+          JSON.stringify(cart_page_config),
+          settings === undefined ? null : JSON.stringify(settings),
+        ],
         function (err, rows) {
           if (err) reject(err);
           resolve(rows.rows[0].id);
@@ -221,6 +235,78 @@ class Shop {
       db.query('SELECT * FROM shops WHERE user_id = $1', [userId], (err, result) => {
         if (err) reject(err);
         resolve(result.rows.map(row => new Shop(row)));
+      });
+    });
+  }
+
+  static async findByUrl(shopifyUrl) {
+    return new Promise((resolve, reject) => {
+      db.query('SELECT * FROM shops WHERE shopify_url = $1', [shopifyUrl], (err, result) => {
+        if (err) reject(err);
+        const row = result?.rows[0];
+        if (row) {
+          // Parse config fields
+          if (row.success_page_config) {
+            try {
+              row.success_page_config = JSON.parse(row.success_page_config);
+            } catch (e) {
+              row.success_page_config = defaultSuccessPageConfig;
+            }
+          } else {
+            row.success_page_config = defaultSuccessPageConfig;
+          }
+          if (row.cart_page_config) {
+            try {
+              row.cart_page_config = JSON.parse(row.cart_page_config);
+            } catch (e) {
+              row.cart_page_config = defaultCartPageConfig;
+            }
+          } else {
+            row.cart_page_config = defaultCartPageConfig;
+          }
+          resolve(new Shop(row));
+        } else {
+          resolve(null);
+        }
+      });
+    });
+  }
+
+  static async updateWithSettings(id, shopData) {
+    const { name, shopify_url, admin_api_token, settings } = shopData;
+    return new Promise((resolve, reject) => {
+      let query = 'UPDATE shops SET';
+      const params = [];
+      let paramCount = 0;
+
+      if (name !== undefined) {
+        query += ` name = $${++paramCount},`;
+        params.push(name);
+      }
+
+      if (shopify_url !== undefined) {
+        query += ` shopify_url = $${++paramCount},`;
+        params.push(shopify_url);
+      }
+
+      if (admin_api_token !== undefined) {
+        query += ` admin_api_token = $${++paramCount},`;
+        params.push(admin_api_token);
+      }
+
+      if (settings !== undefined) {
+        query += ` settings = $${++paramCount},`;
+        params.push(JSON.stringify(settings));
+      }
+
+      // Remove trailing comma
+      query = query.slice(0, -1);
+      query += ` WHERE id = $${++paramCount}`;
+      params.push(id);
+
+      db.query(query, params, function (err, result) {
+        if (err) reject(err);
+        resolve(result);
       });
     });
   }

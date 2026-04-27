@@ -8,6 +8,7 @@ const userRoutes = require("./src/routes/user");
 const checkSessionRouter = require("./src/routes/checkSession");
 const shopRoutes = require("./src/routes/shop");
 const shopifyRoutes = require("./src/routes/shopify");
+const shopifyOAuthRoutes = require("./src/routes/shopify-oauth");
 const analyticsRoutes = require("./src/routes/analytics");
 const monoCheckoutRoutes = require("./src/routes/monoCheckout");
 const paymentsRoutes = require("./src/routes/payments");
@@ -20,6 +21,10 @@ const reviewRoutes = require("./src/routes/reviews");
 // Short link redirects moved to separate service (short-links repo)
 // const redirectRoutes = require("./src/routes/redirect");
 const app = express();
+
+// ngrok / cloudflared terminate HTTPS before forwarding to this local server.
+// Trust proxy headers so req.protocol stays "https" for Shopify OAuth URLs.
+app.set('trust proxy', true);
 
 app.use(cors({
   origin: true,
@@ -41,6 +46,7 @@ app.use('/user', userRoutes);
 app.use('/api', checkSessionRouter);
 app.use('/shops', shopRoutes);
 app.use('/shopify', shopifyRoutes);
+app.use('/shopify-oauth', shopifyOAuthRoutes);
 app.use('/analytics', analyticsRoutes);
 app.use('/mono', monoCheckoutRoutes);
 app.use('/payments', paymentsRoutes);
