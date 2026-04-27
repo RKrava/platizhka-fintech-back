@@ -1,29 +1,45 @@
-const db = require('../config/db');
+const supabaseAdmin = require('../config/supabase');
 
 const defaultSuccessPageConfig = {
-  "backgroundColor": "#F3F4F6",
-  "cardBackgroundColor": "#ffffff",
-  "textColor": "#000000",
-  "primaryColor": "000000",
-  "title": "Дякуємо за ваше замовлення!",
-  "description": "Ваше замовлення було успішно оформлене. Ви отримаєте лист із деталями замовлення на вашу електронну пошту.",
-  "orderNumber": "1235",    
-  "continueShoppingText": "Продовжити покупки",
-  "contactInfoText": "Якщо у вас виникли питання, зв'яжіться з нашою службою підтримки:",
-  "thankYouText": "Ми цінуємо ваш вибір і сподіваємося побачити вас знову!"
+  backgroundColor: '#F3F4F6',
+  cardBackgroundColor: '#ffffff',
+  textColor: '#000000',
+  primaryColor: '000000',
+  title: 'Дякуємо за ваше замовлення!',
+  description:
+    'Ваше замовлення було успішно оформлене. Ви отримаєте лист із деталями замовлення на вашу електронну пошту.',
+  orderNumber: '1235',
+  continueShoppingText: 'Продовжити покупки',
+  contactInfoText: "Якщо у вас виникли питання, зв'яжіться з нашою службою підтримки:",
+  thankYouText: 'Ми цінуємо ваш вибір і сподіваємося побачити вас знову!',
 };
 
 const defaultCartPageConfig = {
-  "backgroundColor": "#F3F4F6",
-  "cardBackgroundColor": "#ffffff",
-  "textColor": "#000000",
-  "buttonColor": "#c6c7c7",
-  "showImages": true,
-  "logo": "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Untitled%20design%20(1)-vubXMNP4oUztYdwiAW6WgvhxYVogR0.png",
-  "allowCashOnDelivery": true,
-  "showSelfPickup": true,
-  "showDiscountSection": true
+  backgroundColor: '#F3F4F6',
+  cardBackgroundColor: '#ffffff',
+  textColor: '#000000',
+  buttonColor: '#c6c7c7',
+  showImages: true,
+  logo: 'https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Untitled%20design%20(1)-vubXMNP4oUztYdwiAW6WgvhxYVogR0.png',
+  allowCashOnDelivery: true,
+  showSelfPickup: true,
+  showDiscountSection: true,
 };
+
+function parseJsonField(value, fallback) {
+  if (value === undefined || value === null || value === '') return fallback;
+  if (typeof value !== 'string') return value;
+
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
+
+function asPgResult(data) {
+  return { rows: data || [], rowCount: Array.isArray(data) ? data.length : data ? 1 : 0 };
+}
 
 class Shop {
   constructor(row) {
@@ -43,13 +59,9 @@ class Shop {
     this.mono_checkout_token = row.mono_checkout_token;
     this.hutko_merchant_id = row.hutko_merchant_id;
     this.hutko_secret_key = row.hutko_secret_key;
-    // Notification settings
     this.turbosms_token = row.turbosms_token;
     this.turbosms_sender = row.turbosms_sender;
     this.abandoned_promo_code = row.abandoned_promo_code;
-    // Step 3 urgent promo — bigger discount (e.g. 20%) with a short
-    // validity window, used as the "last chance" nudge. Falls back to
-    // abandoned_promo_code when unset.
     this.abandoned_promo_urgent_code = row.abandoned_promo_urgent_code;
     this.abandoned_promo_urgent_percent = row.abandoned_promo_urgent_percent;
     this.abandoned_notifications_enabled = row.abandoned_notifications_enabled;
@@ -58,259 +70,185 @@ class Shop {
     this.smtp_user = row.smtp_user;
     this.smtp_pass = row.smtp_pass;
     this.smtp_from = row.smtp_from;
-    // Funnel timing & channel
     this.notif_step1_minutes = row.notif_step1_minutes || 30;
     this.notif_step2_minutes = row.notif_step2_minutes || 1440;
     this.notif_step3_minutes = row.notif_step3_minutes || 2880;
     this.notif_channel_priority = row.notif_channel_priority || 'sms_first';
   }
 
+  static normalizeRow(row) {
+    if (!row) return null;
+
+    return {
+      ...row,
+      success_page_config: parseJsonField(row.success_page_config, defaultSuccessPageConfig),
+      cart_page_config: parseJsonField(row.cart_page_config, defaultCartPageConfig),
+      settings: parseJsonField(row.settings, row.settings || null),
+    };
+  }
+
+  static fromRow(row) {
+    const normalized = Shop.normalizeRow(row);
+    return normalized ? new Shop(normalized) : null;
+  }
+
   static async create(shopData) {
-    const { 
-      user_id, 
-      name, 
-      description, 
+    const {
+      user_id,
+      name,
+      description,
       shopify_url,
       domain_url,
-      admin_api_token, 
-      storefront_api_token, 
-      success_page_config = defaultSuccessPageConfig, 
+      admin_api_token,
+      storefront_api_token,
+      success_page_config = defaultSuccessPageConfig,
       cart_page_config = defaultCartPageConfig,
-      settings
+      settings,
     } = shopData;
 
-    return new Promise((resolve, reject) => {
-      db.query(
-        `INSERT INTO shops (user_id, name, description, shopify_url, domain_url, admin_api_token, storefront_api_token, success_page_config, cart_page_config, settings) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
-        [
-          user_id,
-          name,
-          description,
-          shopify_url,
-          domain_url,
-          admin_api_token,
-          storefront_api_token,
-          JSON.stringify(success_page_config),
-          JSON.stringify(cart_page_config),
-          settings === undefined ? null : JSON.stringify(settings),
-        ],
-        function (err, rows) {
-          if (err) reject(err);
-          resolve(rows.rows[0].id);
-        }
-      );
-    });
+    const { data, error } = await supabaseAdmin
+      .from('shops')
+      .insert({
+        user_id,
+        name,
+        description,
+        shopify_url,
+        domain_url,
+        admin_api_token,
+        storefront_api_token,
+        success_page_config,
+        cart_page_config,
+        settings: settings === undefined ? null : settings,
+      })
+      .select('id')
+      .single();
+
+    if (error) throw error;
+    return data.id;
   }
 
   static async findById(id) {
-    return new Promise((resolve, reject) => {
-      db.query('SELECT * FROM shops WHERE id = $1', [id], (err, result) => {
-        if (err) reject(err);
-        const row = result?.rows[0]
-        if (row) {
-          // Проверка и парсинг success_page_config
-          if (row.success_page_config) {
-            try {
-              row.success_page_config = JSON.parse(row.success_page_config);
-            } catch (e) {
-              console.error('Ошибка при парсинге success_page_config:', e);
-              row.success_page_config = defaultSuccessPageConfig;
-            }
-          } else {
-            row.success_page_config = defaultSuccessPageConfig;
-          }
+    const { data, error } = await supabaseAdmin
+      .from('shops')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
 
-          // Проверка и парсинг cart_page_config
-          if (row.cart_page_config) {
-            try {
-              row.cart_page_config = JSON.parse(row.cart_page_config);
-            } catch (e) {
-              console.error('Ошибка при парсинге cart_page_config:', e);
-              row.cart_page_config = defaultCartPageConfig;
-            }
-          } else {
-            row.cart_page_config = defaultCartPageConfig;
-          }
-
-          resolve(new Shop(row));
-        } else {
-          resolve(null);
-        }
-      });
-    });
+    if (error) throw error;
+    return Shop.fromRow(data);
   }
 
   static async findByHost(shopify_url) {
-    return new Promise((resolve, reject) => {
-      db.query('SELECT * FROM shops WHERE shopify_url = $1', [shopify_url], (err, result) => {
-        if (err) reject(err);
-        const row = result?.rows[0]
+    const { data, error } = await supabaseAdmin
+      .from('shops')
+      .select('*')
+      .eq('shopify_url', shopify_url)
+      .maybeSingle();
 
-        if (!row) {
-          resolve(null)
-        }
-
-        resolve(new Shop(result.rows[0]));
-      });
-    });
-  }
-
-  static async updateConfig(id, success_page_config, cart_page_config, mono_token, mono_checkout_token, hutko_merchant_id, hutko_secret_key) {
-    return new Promise((resolve, reject) => {
-      let query = 'UPDATE shops SET';
-      const params = [];
-      let paramsNumber = 0
-      
-      if (success_page_config !== undefined) {
-        query += ` success_page_config = $${++paramsNumber},`;
-        params.push(JSON.stringify(success_page_config));
-      }
-      
-      if (cart_page_config !== undefined) {
-        query += ` cart_page_config = $${++paramsNumber},`;
-        params.push(JSON.stringify(cart_page_config));
-      }
-
-      if (mono_token !== undefined) {
-        query += ` mono_token = $${++paramsNumber},`;
-        params.push(mono_token);
-      }
-
-      if (mono_checkout_token !== undefined) {
-        query += ` mono_checkout_token = $${++paramsNumber},`;
-        params.push(mono_checkout_token);
-      }
-
-      if (hutko_merchant_id !== undefined) {
-        query += ` hutko_merchant_id = $${++paramsNumber},`;
-        params.push(hutko_merchant_id);
-      }
-
-      if (hutko_secret_key !== undefined) {
-        query += ` hutko_secret_key = $${++paramsNumber},`;
-        params.push(hutko_secret_key);
-      }
-      
-      // Удаляем последнюю запятую
-      query = query.slice(0, -1);
-      
-      query += ` WHERE id = $${++paramsNumber}`;
-      params.push(id);
-      
-      db.query(query, params, function (err, result) {
-        if (err) reject(err);
-        resolve(result);
-      });
-    });
-  }
-
-  static async delete(id) {
-    return new Promise((resolve, reject) => {
-      db.query('DELETE FROM shops WHERE id = $1', [id], function (err, result) {
-        if (err) reject(err);
-        resolve(result);
-      });
-    });
-  }
-
-  static async update(id, shopData) {
-    const { name, description, shopify_url, domain_url, admin_api_token, storefront_api_token } = shopData;
-    return new Promise((resolve, reject) => {
-      db.query(
-        `UPDATE shops 
-         SET name = $1, description = $2, shopify_url = $3, admin_api_token = $4, storefront_api_token = $5, domain_url = $6
-         WHERE id = $7`,
-        [name, description, shopify_url, admin_api_token, storefront_api_token, domain_url, id],
-        function (err, result) {
-          if (err) reject(err);
-          resolve(result);
-        }
-      );
-    });
-  }
-
-  static async findByUserId(userId) {
-    return new Promise((resolve, reject) => {
-      db.query('SELECT * FROM shops WHERE user_id = $1', [userId], (err, result) => {
-        if (err) reject(err);
-        resolve(result.rows.map(row => new Shop(row)));
-      });
-    });
+    if (error) throw error;
+    return Shop.fromRow(data);
   }
 
   static async findByUrl(shopifyUrl) {
-    return new Promise((resolve, reject) => {
-      db.query('SELECT * FROM shops WHERE shopify_url = $1', [shopifyUrl], (err, result) => {
-        if (err) reject(err);
-        const row = result?.rows[0];
-        if (row) {
-          // Parse config fields
-          if (row.success_page_config) {
-            try {
-              row.success_page_config = JSON.parse(row.success_page_config);
-            } catch (e) {
-              row.success_page_config = defaultSuccessPageConfig;
-            }
-          } else {
-            row.success_page_config = defaultSuccessPageConfig;
-          }
-          if (row.cart_page_config) {
-            try {
-              row.cart_page_config = JSON.parse(row.cart_page_config);
-            } catch (e) {
-              row.cart_page_config = defaultCartPageConfig;
-            }
-          } else {
-            row.cart_page_config = defaultCartPageConfig;
-          }
-          resolve(new Shop(row));
-        } else {
-          resolve(null);
-        }
-      });
+    return Shop.findByHost(shopifyUrl);
+  }
+
+  static async findByUserId(userId) {
+    const { data, error } = await supabaseAdmin
+      .from('shops')
+      .select('*')
+      .eq('user_id', userId);
+
+    if (error) throw error;
+    return (data || []).map((row) => Shop.fromRow(row));
+  }
+
+  static async findAll() {
+    const { data, error } = await supabaseAdmin.from('shops').select('*');
+
+    if (error) throw error;
+    return (data || []).map((row) => Shop.fromRow(row));
+  }
+
+  static async updateConfig(
+    id,
+    success_page_config,
+    cart_page_config,
+    mono_token,
+    mono_checkout_token,
+    hutko_merchant_id,
+    hutko_secret_key,
+  ) {
+    const updates = {};
+
+    if (success_page_config !== undefined) updates.success_page_config = success_page_config;
+    if (cart_page_config !== undefined) updates.cart_page_config = cart_page_config;
+    if (mono_token !== undefined) updates.mono_token = mono_token;
+    if (mono_checkout_token !== undefined) updates.mono_checkout_token = mono_checkout_token;
+    if (hutko_merchant_id !== undefined) updates.hutko_merchant_id = hutko_merchant_id;
+    if (hutko_secret_key !== undefined) updates.hutko_secret_key = hutko_secret_key;
+
+    return Shop.updateColumns(id, updates);
+  }
+
+  static async update(id, shopData) {
+    const {
+      name,
+      description,
+      shopify_url,
+      domain_url,
+      admin_api_token,
+      storefront_api_token,
+    } = shopData;
+
+    return Shop.updateColumns(id, {
+      name,
+      description,
+      shopify_url,
+      domain_url,
+      admin_api_token,
+      storefront_api_token,
     });
   }
 
   static async updateWithSettings(id, shopData) {
     const { name, shopify_url, admin_api_token, settings } = shopData;
-    return new Promise((resolve, reject) => {
-      let query = 'UPDATE shops SET';
-      const params = [];
-      let paramCount = 0;
 
-      if (name !== undefined) {
-        query += ` name = $${++paramCount},`;
-        params.push(name);
-      }
-
-      if (shopify_url !== undefined) {
-        query += ` shopify_url = $${++paramCount},`;
-        params.push(shopify_url);
-      }
-
-      if (admin_api_token !== undefined) {
-        query += ` admin_api_token = $${++paramCount},`;
-        params.push(admin_api_token);
-      }
-
-      if (settings !== undefined) {
-        query += ` settings = $${++paramCount},`;
-        params.push(JSON.stringify(settings));
-      }
-
-      // Remove trailing comma
-      query = query.slice(0, -1);
-      query += ` WHERE id = $${++paramCount}`;
-      params.push(id);
-
-      db.query(query, params, function (err, result) {
-        if (err) reject(err);
-        resolve(result);
-      });
+    return Shop.updateColumns(id, {
+      name,
+      shopify_url,
+      admin_api_token,
+      settings,
     });
   }
 
+  static async updateColumns(id, updates) {
+    const cleanUpdates = Object.fromEntries(
+      Object.entries(updates).filter(([, value]) => value !== undefined),
+    );
+
+    if (Object.keys(cleanUpdates).length === 0) return asPgResult([]);
+
+    const { data, error } = await supabaseAdmin
+      .from('shops')
+      .update(cleanUpdates)
+      .eq('id', id)
+      .select('*');
+
+    if (error) throw error;
+    return asPgResult(data);
+  }
+
+  static async delete(id) {
+    const { data, error } = await supabaseAdmin
+      .from('shops')
+      .delete()
+      .eq('id', id)
+      .select('*');
+
+    if (error) throw error;
+    return asPgResult(data);
+  }
 }
 
 module.exports = Shop;

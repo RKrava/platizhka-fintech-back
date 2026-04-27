@@ -1,313 +1,178 @@
-const db = require('../config/db');
+const supabaseAdmin = require('../config/supabase');
 const { v4: uuidv4 } = require('uuid');
 
+function asPgResult(data) {
+    return { rows: data || [], rowCount: Array.isArray(data) ? data.length : data ? 1 : 0 };
+}
+
 class InvoiceConnector {
-    constructor({ id, mono_id, order_shopify_id, orderRef }) {
+    constructor({ id = null, mono_id = null, order_shopify_id = null, orderRef = null } = {}) {
         this.id = id;
         this.mono_id = mono_id;
         this.order_shopify_id = order_shopify_id;
         this.orderRef = orderRef;
     }
 
-    // Альтернативный метод создания с использованием базы данных для генерации UUID
+    static fromRow(row) {
+        return row ? new InvoiceConnector(row) : null;
+    }
+
     async createWithDbUuid() {
-        return new Promise((resolve, reject) => {
-            db.query(
-                `INSERT INTO invoice_connectors (id, mono_id, order_shopify_id, "orderRef") 
-                 VALUES (gen_random_uuid(), $1, $2, $3) RETURNING id`,
-                [null, null, null],
-                (err, result) => {
-                    if (err) {
-                        console.error('Database insert error with gen_random_uuid:', err);
-                        reject(err);
-                        return;
-                    }
-                    const newId = result.rows[0].id;
-                    this.id = newId;
-                    this.mono_id = null;
-                    this.order_shopify_id = null;
-                    this.orderRef = null;
-                    console.log(`Successfully created with DB UUID: ${newId}`);
-                    resolve(this);
-                }
-            );
-        });
+        return this.create();
     }
 
-    // Создать новый рядок с уникальным UUID
     async create() {
-        return new Promise(async (resolve, reject) => {
-            try {
-                // Проверяем подключение к базе данных
-                await new Promise((resolveTest, rejectTest) => {
-                    db.query('SELECT 1', (err, result) => {
-                        if (err) {
-                            console.error('Database connection test failed:', err);
-                            rejectTest(err);
-                            return;
-                        }
-                        resolveTest(result);
-                    });
-                });
-            } catch (error) {
-                reject(new Error(`Ошибка подключения к базе данных: ${error.message}`));
-                return;
-            }
+        const newId = this.id || uuidv4();
 
-            let attempts = 0;
-            const maxAttempts = 5;
-            
-            while (attempts < maxAttempts) {
-                try {
-                    const newId = uuidv4();
-                    console.log(`Attempt ${attempts + 1}: Generated UUID: ${newId}`);
-                    
-                    // Проверяем, что UUID не занят
-                    const existing = await InvoiceConnector.findById(newId);
-                    if (existing) {
-                        console.log(`UUID ${newId} already exists, trying again...`);
-                        attempts++;
-                        continue;
-                    }
-                    
-                    // Вставляем новый рядок без mono_id, order_shopify_id и orderRef
-                    const result = await new Promise((resolveInsert, rejectInsert) => {
-                        db.query(
-                            `INSERT INTO invoice_connectors (id, mono_id, order_shopify_id, "orderRef") 
-                             VALUES ($1, $2, $3, $4)`,
-                            [newId, null, null, null],
-                            function (err, result) {
-                                if (err) {
-                                    console.error('Database insert error:', err);
-                                    rejectInsert(err);
-                                    return;
-                                }
-                                console.log(`Successfully inserted UUID: ${newId}`);
-                                resolveInsert(result);
-                            }
-                        );
-                    });
-                    
-                    this.id = newId;
-                    this.mono_id = null;
-                    this.order_shopify_id = null;
-                    this.orderRef = null;
-                    resolve(this);
-                    return;
-                    
-                } catch (error) {
-                    console.error(`Attempt ${attempts + 1} failed:`, error);
-                    attempts++;
-                    if (attempts >= maxAttempts) {
-                        reject(new Error(`Не удалось создать уникальный UUID после ${maxAttempts} попыток. Последняя ошибка: ${error.message}`));
-                        return;
-                    }
-                }
-            }
-        });
+        const { data, error } = await supabaseAdmin
+            .from('invoice_connectors')
+            .insert({
+                id: newId,
+                mono_id: null,
+                order_shopify_id: null,
+                orderRef: null,
+            })
+            .select('*')
+            .single();
+
+        if (error) throw error;
+
+        this.id = data.id;
+        this.mono_id = data.mono_id;
+        this.order_shopify_id = data.order_shopify_id;
+        this.orderRef = data.orderRef;
+        return this;
     }
 
-    // Добавить mono_id к существующему ряду
     async addMonoId(monoId) {
-        return new Promise((resolve, reject) => {
-            db.query(
-                `UPDATE invoice_connectors 
-                 SET mono_id = $1 
-                 WHERE id = $2 AND mono_id IS NULL`,
-                [monoId, this.id],
-                function (err, result) {
-                    if (err) {
-                        reject(err);
-                        return;
-                    }
-                    if (result.rowCount === 0) {
-                        reject(new Error('Рядок не найден или уже имеет mono_id'));
-                        return;
-                    }
-                    this.mono_id = monoId;
-                    resolve(this);
-                }.bind(this)
-            );
-        });
+        const { data, error } = await supabaseAdmin
+            .from('invoice_connectors')
+            .update({ mono_id: monoId })
+            .eq('id', this.id)
+            .is('mono_id', null)
+            .select('*')
+            .maybeSingle();
+
+        if (error) throw error;
+        if (!data) throw new Error('Connector not found or already has mono_id');
+
+        this.mono_id = data.mono_id;
+        this.order_shopify_id = data.order_shopify_id;
+        this.orderRef = data.orderRef;
+        return this;
     }
 
-    // Добавить order_shopify_id к существующему ряду
     async addShopifyOrderId(shopifyOrderId) {
-        return new Promise((resolve, reject) => {
-            db.query(
-                `UPDATE invoice_connectors 
-                 SET order_shopify_id = $1 
-                 WHERE id = $2 AND order_shopify_id IS NULL`,
-                [shopifyOrderId, this.id],
-                function (err, result) {
-                    if (err) {
-                        reject(err);
-                        return;
-                    }
-                    if (result.rowCount === 0) {
-                        reject(new Error('Рядок не найден или уже имеет order_shopify_id'));
-                        return;
-                    }
-                    this.order_shopify_id = shopifyOrderId;
-                    resolve(this);
-                }.bind(this)
-            );
-        });
+        const { data, error } = await supabaseAdmin
+            .from('invoice_connectors')
+            .update({ order_shopify_id: shopifyOrderId })
+            .eq('id', this.id)
+            .is('order_shopify_id', null)
+            .select('*')
+            .maybeSingle();
+
+        if (error) throw error;
+        if (!data) throw new Error('Connector not found or already has order_shopify_id');
+
+        this.mono_id = data.mono_id;
+        this.order_shopify_id = data.order_shopify_id;
+        this.orderRef = data.orderRef;
+        return this;
     }
 
-    // Добавить orderRef к существующему ряду
     async addOrderRef(orderRef) {
-        return new Promise((resolve, reject) => {
-            db.query(
-                `UPDATE invoice_connectors 
-                 SET "orderRef" = $1 
-                 WHERE id = $2 AND "orderRef" IS NULL`,
-                [orderRef, this.id],
-                function (err, result) {
-                    if (err) {
-                        reject(err);
-                        return;
-                    }
-                    if (result.rowCount === 0) {
-                        reject(new Error('Рядок не найден или уже имеет orderRef'));
-                        return;
-                    }
-                    this.orderRef = orderRef;
-                    resolve(this);
-                }.bind(this)
-            );
-        });
+        const { data, error } = await supabaseAdmin
+            .from('invoice_connectors')
+            .update({ orderRef })
+            .eq('id', this.id)
+            .is('orderRef', null)
+            .select('*')
+            .maybeSingle();
+
+        if (error) throw error;
+        if (!data) throw new Error('Connector not found or already has orderRef');
+
+        this.mono_id = data.mono_id;
+        this.order_shopify_id = data.order_shopify_id;
+        this.orderRef = data.orderRef;
+        return this;
     }
 
-    // Поиск по обычному UUID
     static async findById(id) {
-        return new Promise((resolve, reject) => {
-            db.query('SELECT * FROM invoice_connectors WHERE id = $1', [id], (err, result) => {
-                if (err) {
-                    console.error('Database query error in findById:', err);
-                    reject(err);
-                    return;
-                }
-                const row = result?.rows[0];
-                if (row) {
-                    resolve(new InvoiceConnector(row));
-                } else {
-                    resolve(null);
-                }
-            });
-        });
+        const { data, error } = await supabaseAdmin
+            .from('invoice_connectors')
+            .select('*')
+            .eq('id', id)
+            .maybeSingle();
+
+        if (error) throw error;
+        return InvoiceConnector.fromRow(data);
     }
 
-    // Поиск по mono_id
     static async findByMonoId(monoId) {
-        return new Promise((resolve, reject) => {
-            db.query('SELECT * FROM invoice_connectors WHERE mono_id = $1', [monoId], (err, result) => {
-                if (err) {
-                    reject(err);
-                    return;
-                }
-                const row = result?.rows[0];
-                if (row) {
-                    resolve(new InvoiceConnector(row));
-                } else {
-                    resolve(null);
-                }
-            });
-        });
+        const { data, error } = await supabaseAdmin
+            .from('invoice_connectors')
+            .select('*')
+            .eq('mono_id', monoId)
+            .maybeSingle();
+
+        if (error) throw error;
+        return InvoiceConnector.fromRow(data);
     }
 
-    // Поиск по order_shopify_id
     static async findByShopifyOrderId(shopifyOrderId) {
-        return new Promise((resolve, reject) => {
-            db.query('SELECT * FROM invoice_connectors WHERE order_shopify_id = $1', [shopifyOrderId], (err, result) => {
-                if (err) {
-                    reject(err);
-                    return;
-                }
-                const row = result?.rows[0];
-                if (row) {
-                    resolve(new InvoiceConnector(row));
-                } else {
-                    resolve(null);
-                }
-            });
-        });
+        const { data, error } = await supabaseAdmin
+            .from('invoice_connectors')
+            .select('*')
+            .eq('order_shopify_id', shopifyOrderId)
+            .maybeSingle();
+
+        if (error) throw error;
+        return InvoiceConnector.fromRow(data);
     }
 
-    // Поиск по orderRef
     static async findByOrderRef(orderRef) {
-        return new Promise((resolve, reject) => {
-            db.query('SELECT * FROM invoice_connectors WHERE "orderRef" = $1', [orderRef], (err, result) => {
-                if (err) {
-                    reject(err);
-                    return;
-                }
-                const row = result?.rows[0];
-                if (row) {
-                    resolve(new InvoiceConnector(row));
-                } else {
-                    resolve(null);
-                }
-            });
-        });
+        const { data, error } = await supabaseAdmin
+            .from('invoice_connectors')
+            .select('*')
+            .eq('orderRef', orderRef)
+            .maybeSingle();
+
+        if (error) throw error;
+        return InvoiceConnector.fromRow(data);
     }
 
-    // Получить все неиспользованные коннекторы (без mono_id)
     static async getUnusedConnectors() {
-        return new Promise((resolve, reject) => {
-            db.query('SELECT * FROM invoice_connectors WHERE mono_id IS NULL', (err, result) => {
-                if (err) {
-                    reject(err);
-                    return;
-                }
-                const connectors = result.rows.map(row => new InvoiceConnector(row));
-                resolve(connectors);
-            });
-        });
+        const { data, error } = await supabaseAdmin
+            .from('invoice_connectors')
+            .select('*')
+            .is('mono_id', null);
+
+        if (error) throw error;
+        return (data || []).map((row) => InvoiceConnector.fromRow(row));
     }
 
-    // Удалить коннектор
     async delete() {
-        return new Promise((resolve, reject) => {
-            db.query(
-                'DELETE FROM invoice_connectors WHERE id = $1',
-                [this.id],
-                function (err, result) {
-                    if (err) {
-                        reject(err);
-                        return;
-                    }
-                    resolve(result);
-                }
-            );
-        });
+        const { data, error } = await supabaseAdmin
+            .from('invoice_connectors')
+            .delete()
+            .eq('id', this.id)
+            .select('*');
+
+        if (error) throw error;
+        return asPgResult(data);
     }
 
-    // Получить данные коннектора по ID (mono_id, order_shopify_id и orderRef)
     static async getConnectorData(connectorId) {
-        return new Promise((resolve, reject) => {
-            db.query(
-                'SELECT id, mono_id, order_shopify_id, "orderRef" FROM invoice_connectors WHERE id = $1',
-                [connectorId],
-                function (err, result) {
-                    if (err) {
-                        reject(err);
-                        return;
-                    }
-                    const row = result?.rows[0];
-                    if (row) {
-                        resolve({
-                            id: row.id,
-                            mono_id: row.mono_id,
-                            order_shopify_id: row.order_shopify_id,
-                            orderRef: row.orderRef
-                        });
-                    } else {
-                        resolve(null);
-                    }
-                }
-            );
-        });
+        const connector = await InvoiceConnector.findById(connectorId);
+        if (!connector) return null;
+
+        return {
+            id: connector.id,
+            mono_id: connector.mono_id,
+            order_shopify_id: connector.order_shopify_id,
+            orderRef: connector.orderRef,
+        };
     }
 }
 
