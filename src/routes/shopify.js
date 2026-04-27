@@ -2,6 +2,7 @@ const express = require('express');
 const axios = require("axios");
 const crypto = require('crypto');
 const {getCartShopify, createOrder, getOrderNumber, sendTelegramMessage, applyDiscountCode} = require("../shopify/shopify");
+const {clearStorefrontCache} = require("../config/shopifyConfig");
 const Shop = require("../models/Shop");
 const Invoice = require("../models/Invoice");
 const { sendGA4Conversion } = require('../services/ga4');
@@ -149,12 +150,30 @@ function generateHutkoSignature(params, secretKey, merchantId) {
     return crypto.createHash('sha1').update(signatureString).digest('hex').toLowerCase();
 }
 
-// Пример эндпоинта для выполнения GraphQL запроса
+const isStorefrontForbidden = (err) =>
+    err?.response?.code === 403 ||
+    err?.networkStatusCode === 403 ||
+    String(err?.message).includes('403');
+
 router.get('/cart', async (req, res) => {
     try {
-        const shop = await Shop.findById(req.query.storeId);
-        const shopData = await buildShopifyData(shop);
-        res.json(await getCartShopify(req.query.cartid, req.query.storeId, shopData));
+        const storeId = req.query.storeId;
+        let shop = await Shop.findById(storeId);
+        let shopData = await buildShopifyData(shop);
+        try {
+            res.json(await getCartShopify(req.query.cartid, storeId, shopData));
+        } catch (shopifyError) {
+            if (!isStorefrontForbidden(shopifyError)) throw shopifyError;
+
+            // Storefront token is invalid — clear it and retry with a fresh one
+            console.warn(`Storefront 403 for store ${storeId}, refreshing token and retrying`);
+            await Shop.updateColumns(shop.id, { storefront_api_token: null });
+            clearStorefrontCache(storeId);
+
+            shop = await Shop.findById(storeId);
+            shopData = await buildShopifyData(shop);
+            res.json(await getCartShopify(req.query.cartid, storeId, shopData));
+        }
     } catch (error) {
         console.error('Shopify request error:', error);
         res.status(500).json({ error: 'Shopify API error', message: error.message });

@@ -80,6 +80,12 @@ const shopifyCache = {
     storefrontClients: {}
 };
 
+const clearStorefrontCache = (storeId) => {
+    delete shopifyCache.shopifyApis[storeId];
+    delete shopifyCache.sessions[storeId];
+    delete shopifyCache.storefrontClients[storeId];
+};
+
 const getShopifyApi = async (storeId, shopData) => {
     if (!shopifyCache.shopifyApis[storeId]) {
         shopifyCache.shopifyApis[storeId] = shopifyApi({
@@ -113,4 +119,4 @@ const getStoreFrontClient = async (storeId, shopData) => {
 
 
 
-module.exports = {getStoreFrontClient, getShopifyApi, getShopifySession };
+module.exports = {getStoreFrontClient, getShopifyApi, getShopifySession, clearStorefrontCache };
