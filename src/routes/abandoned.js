@@ -1,7 +1,21 @@
 const express = require('express');
 const AbandonedCheckout = require('../models/AbandonedCheckout');
 const Shop = require('../models/Shop');
-const { getStoreFrontClient } = require('../config/shopifyConfig');
+const axios = require('axios');
+
+async function storefrontGraphQL(shopData, query, variables = {}) {
+    const response = await axios.post(
+        `https://${shopData.hostName}/api/2024-10/graphql.json`,
+        { query, variables },
+        {
+            headers: {
+                'X-Shopify-Storefront-Access-Token': shopData.storefrontAccessToken,
+                'Content-Type': 'application/json',
+            },
+        },
+    );
+    return response.data;
+}
 const router = express.Router();
 router.use(express.json());
 
@@ -71,11 +85,9 @@ router.get('/recover/:token', async (req, res) => {
                 // cartItems — масив { variantId, quantity, attributes }
                 if (cartItems.length > 0) {
                     const shopData = {
-                        apiSecretKey: shop.storefront_api_token,
                         hostName: shop.shopify_url,
-                        adminApiAccessToken: shop.admin_api_token
+                        storefrontAccessToken: shop.storefront_api_token,
                     };
-                    const storefrontClient = await getStoreFrontClient(checkout.store_id, shopData);
 
                     const lines = cartItems.map(item => ({
                         merchandiseId: item.variantId,
@@ -85,14 +97,15 @@ router.get('/recover/:token', async (req, res) => {
                             : {})
                     }));
 
-                    const result = await storefrontClient.request(
+                    const result = await storefrontGraphQL(
+                        shopData,
                         `mutation cartCreate($input: CartInput!) {
                             cartCreate(input: $input) {
                                 cart { id }
                                 userErrors { field message }
                             }
                         }`,
-                        { variables: { input: { lines } } }
+                        { input: { lines } },
                     );
 
                     const newCartId = result?.data?.cartCreate?.cart?.id;

@@ -1,8 +1,24 @@
-const {getStoreFrontClient, getShopifySession, getShopifyApi} = require("../config/shopifyConfig");
+const {getShopifySession, getShopifyApi} = require("../config/shopifyConfig");
 const Order = require("../models/Order");
 const AbandonedCheckout = require("../models/AbandonedCheckout");
 const {shopifyApi} = require("@shopify/shopify-api");
 const axios = require("axios");
+
+// Direct Storefront API call — bypasses @shopify/shopify-api SDK to guarantee
+// X-Shopify-Storefront-Access-Token is sent correctly.
+async function storefrontGraphQL(shopData, query, variables = {}) {
+    const response = await axios.post(
+        `https://${shopData.hostName}/api/2024-10/graphql.json`,
+        { query, variables },
+        {
+            headers: {
+                'X-Shopify-Storefront-Access-Token': shopData.storefrontAccessToken,
+                'Content-Type': 'application/json',
+            },
+        },
+    );
+    return response.data;
+}
 
 const getCartShopify = async (cartId, storeId, shopData) => {
     const cartQuery = `
@@ -66,11 +82,8 @@ const getCartShopify = async (cartId, storeId, shopData) => {
       }
     }
         `;
-    const storeFrontClient = await getStoreFrontClient(storeId, shopData)
-    return storeFrontClient.request(cartQuery, {
-        variables: {
-            cartId: 'gid://shopify/Cart/' + cartId,
-        },
+    return storefrontGraphQL(shopData, cartQuery, {
+        cartId: 'gid://shopify/Cart/' + cartId,
     });
 }
 
@@ -212,23 +225,15 @@ const completeDraftOrder = async (draftOrderId, paymentPending, storeId, shopDat
 }
 
 const clearCart = async (cartId, cartLineIdArray, storeId, shopData) => {
-    const storeFrontClient = await getStoreFrontClient(storeId, shopData)
-    return storeFrontClient.request(`mutation cartLinesRemove($cartId: ID!, $lineIds: [ID!]!) {
-              cartLinesRemove(cartId: $cartId, lineIds: $lineIds) {
-                userErrors {
-                  field
-                  message
-                }
-              }
-            }`,
-        {
-            variables: {
-                cartId: 'gid://shopify/Cart/' + cartId,
-                "lineIds": cartLineIdArray
-            },
-        }
+    return storefrontGraphQL(
+        shopData,
+        `mutation cartLinesRemove($cartId: ID!, $lineIds: [ID!]!) {
+            cartLinesRemove(cartId: $cartId, lineIds: $lineIds) {
+                userErrors { field message }
+            }
+        }`,
+        { cartId: 'gid://shopify/Cart/' + cartId, lineIds: cartLineIdArray },
     );
-
 }
 
 const sendTelegramMessage = async (message, chatId) => {
@@ -754,12 +759,9 @@ const applyDiscountCode = async (cartId, discountCodes, storeId, shopData) => {
           }
         }
     `;
-    const storeFrontClient = await getStoreFrontClient(storeId, shopData);
-    return storeFrontClient.request(mutation, {
-        variables: {
-            cartId: 'gid://shopify/Cart/' + cartId,
-            discountCodes,
-        },
+    return storefrontGraphQL(shopData, mutation, {
+        cartId: 'gid://shopify/Cart/' + cartId,
+        discountCodes,
     });
 };
 
