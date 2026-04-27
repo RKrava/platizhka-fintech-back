@@ -70,7 +70,13 @@ async function createAndSaveStorefrontToken(shop, adminApiAccessToken, shopifySe
             },
         );
 
-        const token = response.data?.storefront_access_token?.access_token;
+        const tokenData = response.data?.storefront_access_token;
+        const token = tokenData?.access_token;
+        console.log(
+            `Storefront token created for ${shop.shopify_url}. ` +
+            `access_scope: "${tokenData?.access_scope || '(empty)'}", ` +
+            `title: "${tokenData?.title}"`,
+        );
         if (!token) {
             throw new Error('Shopify did not return a storefront access token');
         }
