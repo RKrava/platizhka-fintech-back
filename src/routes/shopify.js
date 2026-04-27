@@ -22,6 +22,82 @@ const allowedIps = [
     '35.158.251.173'
 ];
 
+async function buildShopifyData(shop) {
+    if (!shop) {
+        throw new Error('Shop not found');
+    }
+
+    const shopifySettings = shop.settings?.shopify || {};
+    const apiSecretKey = shopifySettings.client_secret || process.env.SHOPIFY_APP_SECRET || 'not-used';
+    const adminApiAccessToken = shop.admin_api_token || shopifySettings.access_token;
+    let storefrontAccessToken = shop.storefront_api_token || shopifySettings.storefront_access_token;
+
+    if (!shop.shopify_url) {
+        throw new Error('Shopify domain is not configured for this shop');
+    }
+
+    if (!adminApiAccessToken) {
+        throw new Error('Shopify Admin API token is not configured for this shop. Reinstall Shopify integration.');
+    }
+
+    if (!storefrontAccessToken) {
+        storefrontAccessToken = await createAndSaveStorefrontToken(shop, adminApiAccessToken, shopifySettings);
+    }
+
+    return {
+        apiSecretKey,
+        hostName: shop.shopify_url,
+        adminApiAccessToken,
+        storefrontAccessToken,
+    };
+}
+
+async function createAndSaveStorefrontToken(shop, adminApiAccessToken, shopifySettings) {
+    try {
+        const response = await axios.post(
+            `https://${shop.shopify_url}/admin/api/2024-10/storefront_access_tokens.json`,
+            {
+                storefront_access_token: {
+                    title: 'Platizhka checkout',
+                },
+            },
+            {
+                headers: {
+                    'X-Shopify-Access-Token': adminApiAccessToken,
+                    'Content-Type': 'application/json',
+                },
+            },
+        );
+
+        const token = response.data?.storefront_access_token?.access_token;
+        if (!token) {
+            throw new Error('Shopify did not return a storefront access token');
+        }
+
+        const nextSettings = {
+            ...(shop.settings || {}),
+            shopify: {
+                ...shopifySettings,
+                storefront_access_token: token,
+            },
+        };
+
+        await Shop.updateColumns(shop.id, {
+            storefront_api_token: token,
+            settings: nextSettings,
+        });
+
+        return token;
+    } catch (error) {
+        const status = error.response?.status;
+        const details = error.response?.data ? JSON.stringify(error.response.data) : error.message;
+        throw new Error(
+            `Unable to create Shopify Storefront token${status ? ` (${status})` : ''}. ` +
+            `Add unauthenticated Storefront API scopes to the Shopify app, reinstall it, then try again. Details: ${details}`,
+        );
+    }
+}
+
 // Функция для генерации подписи Hutko
 // Согласно документации Hutko: https://docs.hutko.org/uk/docs/page/3/
 // Алгоритм:
@@ -77,15 +153,11 @@ function generateHutkoSignature(params, secretKey, merchantId) {
 router.get('/cart', async (req, res) => {
     try {
         const shop = await Shop.findById(req.query.storeId);
-        const shopData = {
-            apiSecretKey: shop.storefront_api_token,
-            hostName: shop.shopify_url,
-            adminApiAccessToken: shop.admin_api_token
-        };
+        const shopData = await buildShopifyData(shop);
         res.json(await getCartShopify(req.query.cartid, req.query.storeId, shopData));
     } catch (error) {
         console.error('Shopify request error:', error);
-        res.status(500).json({ error: 'Shopify API error' });
+        res.status(500).json({ error: 'Shopify API error', message: error.message });
     }
 });
 
@@ -96,11 +168,7 @@ router.post('/cart/discount', async (req, res) => {
             return res.status(400).json({ error: 'cartId, discountCode and storeId are required' });
         }
         const shop = await Shop.findById(storeId);
-        const shopData = {
-            apiSecretKey: shop.storefront_api_token,
-            hostName: shop.shopify_url,
-            adminApiAccessToken: shop.admin_api_token
-        };
+        const shopData = await buildShopifyData(shop);
         const result = await applyDiscountCode(cartId, [discountCode], storeId, shopData);
         res.json(result);
     } catch (error) {
@@ -118,11 +186,7 @@ router.post('/order/create', async (req, res) => {
         const reqOrderTotal = req.body.orderTotal || 0
         const reqCartItems = req.body.cartItems || null
         const shop = await Shop.findById(req.body.storeId);
-        const shopData = {
-            apiSecretKey: shop.storefront_api_token,
-            hostName: shop.shopify_url,
-            adminApiAccessToken: shop.admin_api_token
-        };
+        const shopData = await buildShopifyData(shop);
         // payment може бути переданий з фронта (напр. 'Накладений платіж' / 'Карткою'),
         // дефолт — 'Накладений платіж' (цей ендпоінт використовується для COD-потоку)
         customerData.payment = customerData.payment || 'Накладений платіж'
@@ -358,11 +422,7 @@ router.post('/payment/mono', async (req, res) => {
             }
             const gaTrackingData = await GATrackingData.findById(paymentData.invoiceId)
             const shop = await Shop.findById(storeId);
-            const shopData = {
-                apiSecretKey: shop.storefront_api_token,
-                hostName: shop.shopify_url,
-                adminApiAccessToken: shop.admin_api_token
-            };
+            const shopData = await buildShopifyData(shop);
             const monoPromoData = decodedReference.promoData || null;
             const createOrderResponse = await createOrder(
                 decodedReference.cartToken,
@@ -538,11 +598,7 @@ router.get('/order/number', async (req, res) => {
             hostName: shop.shopify_url 
         });
 
-        const shopData = {
-            apiSecretKey: shop.storefront_api_token,
-            hostName: shop.shopify_url,
-            adminApiAccessToken: shop.admin_api_token
-        };
+        const shopData = await buildShopifyData(shop);
 
         console.log('[GET /shopify/order/number] Вызов getOrderNumber с параметрами:', {
             orderId,
@@ -786,11 +842,7 @@ router.post('/payment/hutko/callback', async (req, res) => {
             const storeId = invoice.storeid;
             const gaTrackingData = await GATrackingData.findById(orderId);
             const shop = await Shop.findById(storeId);
-            const shopData = {
-                apiSecretKey: shop.storefront_api_token,
-                hostName: shop.shopify_url,
-                adminApiAccessToken: shop.admin_api_token
-            };
+            const shopData = await buildShopifyData(shop);
 
             const refPromoData = decodedReference.promoData || null;
             const createOrderResponse = await createOrder(

@@ -83,12 +83,12 @@ const shopifyCache = {
 const getShopifyApi = async (storeId, shopData) => {
     if (!shopifyCache.shopifyApis[storeId]) {
         shopifyCache.shopifyApis[storeId] = shopifyApi({
-            apiSecretKey: shopData.apiSecretKey,
+            apiSecretKey: shopData.apiSecretKey || 'not-used',
             hostName: shopData.hostName,
             apiVersion: '2024-10',
             isCustomStoreApp: true,
             adminApiAccessToken: shopData.adminApiAccessToken,
-            privateAppStorefrontAccessToken: shopData.adminApiAccessToken
+            privateAppStorefrontAccessToken: shopData.storefrontAccessToken
         });
     }
     return shopifyCache.shopifyApis[storeId];

@@ -3,6 +3,47 @@ const crypto = require('crypto');
 const axios = require('axios');
 const supabaseAdmin = require('../config/supabase');
 
+const DEFAULT_SHOPIFY_SCOPES = [
+  'read_customers',
+  'write_customers',
+  'read_discounts',
+  'write_discounts',
+  'write_draft_orders',
+  'read_draft_orders',
+  'read_fulfillments',
+  'write_fulfillments',
+  'read_gift_cards',
+  'write_gift_cards',
+  'write_inventory',
+  'read_inventory',
+  'read_markets',
+  'write_markets',
+  'write_order_edits',
+  'read_order_edits',
+  'read_orders',
+  'write_orders',
+  'read_products',
+  'write_products',
+  'read_themes',
+  'write_themes',
+  'unauthenticated_write_bulk_operations',
+  'unauthenticated_read_bulk_operations',
+  'unauthenticated_read_bundles',
+  'unauthenticated_write_checkouts',
+  'unauthenticated_read_checkouts',
+  'unauthenticated_write_customers',
+  'unauthenticated_read_customers',
+  'unauthenticated_read_customer_tags',
+  'unauthenticated_read_metaobjects',
+  'unauthenticated_read_product_pickup_locations',
+  'unauthenticated_read_product_inventory',
+  'unauthenticated_read_product_listings',
+  'unauthenticated_read_product_tags',
+  'unauthenticated_read_selling_plans',
+  'unauthenticated_read_shop_pay_installments_pricing',
+  'unauthenticated_read_content',
+].join(',');
+
 const router = express.Router();
 router.use(express.json());
 
@@ -155,7 +196,7 @@ router.get('/authorize', async (req, res) => {
       return res.status(401).json({ error: 'Invalid HMAC' });
     }
 
-    const scopes = process.env.SHOPIFY_SCOPES || 'write_products,read_products,write_themes,read_themes';
+    const scopes = process.env.SHOPIFY_SCOPES || DEFAULT_SHOPIFY_SCOPES;
     
     // Generate a state parameter for CSRF protection
     const state = crypto.randomBytes(16).toString('hex');
@@ -411,7 +452,7 @@ router.post('/install', async (req, res) => {
       });
     }
 
-    const scopes = process.env.SHOPIFY_SCOPES || 'write_products,read_products,write_themes,read_themes';
+    const scopes = process.env.SHOPIFY_SCOPES || DEFAULT_SHOPIFY_SCOPES;
     const redirectUri = `${getPublicBaseUrl(req)}/shopify-oauth/callback-handler`;
 
     const authUrl = `https://${shop}/admin/oauth/authorize?client_id=${encodeURIComponent(clientId)}&scope=${encodeURIComponent(scopes)}&redirect_uri=${encodeURIComponent(redirectUri)}`;
