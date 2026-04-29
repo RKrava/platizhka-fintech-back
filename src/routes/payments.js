@@ -114,6 +114,21 @@ router.post(
           await incrementCount(invoice.shop_id).catch((e) =>
             console.warn('[payments/webhook] incrementCount failed:', e.message),
           );
+          // Mark abandoned checkout as recovered.
+          const { data: orderForSession } = await supabase
+            .from('orders')
+            .select('metadata')
+            .eq('id', invoice.order_id)
+            .maybeSingle();
+          const sessionId = orderForSession?.metadata?.sessionId;
+          if (sessionId) {
+            await supabase
+              .from('abandoned_checkouts')
+              .update({ recovered: true })
+              .eq('shop_id', invoice.shop_id)
+              .eq('session_id', sessionId)
+              .catch((e) => console.warn('[payments/webhook] abandoned recovery failed:', e.message));
+          }
         }
       }
 
@@ -263,6 +278,16 @@ router.post('/invoices', async (req, res) => {
         await incrementCount(shopId).catch((e) =>
           console.warn('[payments/invoices] COD incrementCount failed:', e.message),
         );
+        // Mark abandoned checkout as recovered for COD orders.
+        const sessionId = (metadata || {}).sessionId;
+        if (sessionId) {
+          await supabase
+            .from('abandoned_checkouts')
+            .update({ recovered: true })
+            .eq('shop_id', shopId)
+            .eq('session_id', sessionId)
+            .catch((e) => console.warn('[payments/invoices] COD abandoned recovery failed:', e.message));
+        }
       }
       return res.json({
         orderId,
