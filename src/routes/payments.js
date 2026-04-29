@@ -238,8 +238,11 @@ router.post('/invoices', async (req, res) => {
         needs_callback: !!needsCallback,
         marketing_consent: !!marketingConsent,
         status: 'pending',
-        metadata: { ...metadata, isTestCheckout: !!isTestCheckout },
-        is_test: isTest,
+        metadata: { ...metadata, isTestCheckout: !!isTestCheckout, providerIsTest },
+        // Order is_test only when the checkout itself is test (dev panel / test page).
+        // providerIsTest (payment method using sandbox creds) does NOT mark the order
+        // as test — real customers can pay via a sandbox-configured provider during staging.
+        is_test: !!isTestCheckout,
       })
       .select('id')
       .single();

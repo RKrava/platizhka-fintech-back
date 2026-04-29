@@ -12,7 +12,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const supabase = require('../config/supabase');
-const authMiddleware = require('../middleware/auth');
+const supabaseAuth = require('../middleware/supabaseAuth');
 const { getPlan, getBillingAmount } = require('../billing/plans');
 const { getSubscription, activateSubscription, downgradeToFree, logEvent } = require('../billing/subscriptions');
 const { getCurrentCount, checkLimit } = require('../billing/orderCounting');
@@ -103,12 +103,12 @@ router.post('/webhook', async (req, res) => {
 router.use(express.json());
 
 /** GET /billing/status?shopId=X — returns plan, usage, subscription info */
-router.get('/status', authMiddleware, async (req, res) => {
+router.get('/status', supabaseAuth, async (req, res) => {
   try {
-    const shopId = parseInt(req.query.shopId, 10);
+    const shopId = req.query.shopId;
     if (!shopId) return res.status(400).json({ error: 'shopId required' });
 
-    await assertShopOwner(shopId, req.user.id);
+    await assertShopOwner(shopId, req.supabaseUser.id);
 
     const sub = await getSubscription(shopId);
     const plan = getPlan(sub.plan_code);
@@ -135,14 +135,14 @@ router.get('/status', authMiddleware, async (req, res) => {
 });
 
 /** POST /billing/subscribe — initiate first subscription payment */
-router.post('/subscribe', authMiddleware, async (req, res) => {
+router.post('/subscribe', supabaseAuth, async (req, res) => {
   try {
     const { shopId, planCode, billingPeriod = 'monthly' } = req.body;
     if (!shopId || !planCode) return res.status(400).json({ error: 'shopId and planCode required' });
     if (!['growth', 'scale'].includes(planCode)) return res.status(400).json({ error: 'Invalid plan' });
     if (!['monthly', 'annual'].includes(billingPeriod)) return res.status(400).json({ error: 'Invalid billingPeriod' });
 
-    await assertShopOwner(shopId, req.user.id);
+    await assertShopOwner(shopId, req.supabaseUser.id);
 
     const plan = getPlan(planCode);
     const amount = getBillingAmount(planCode, billingPeriod);
@@ -184,11 +184,11 @@ router.post('/subscribe', authMiddleware, async (req, res) => {
 });
 
 /** POST /billing/cancel — cancel at end of current period */
-router.post('/cancel', authMiddleware, async (req, res) => {
+router.post('/cancel', supabaseAuth, async (req, res) => {
   try {
     const { shopId } = req.body;
     if (!shopId) return res.status(400).json({ error: 'shopId required' });
-    await assertShopOwner(shopId, req.user.id);
+    await assertShopOwner(shopId, req.supabaseUser.id);
 
     const sub = await getSubscription(shopId);
     if (sub.plan_code === 'free') return res.json({ ok: true, message: 'Already on free plan' });
@@ -209,11 +209,11 @@ router.post('/cancel', authMiddleware, async (req, res) => {
 });
 
 /** GET /billing/invoices?shopId=X */
-router.get('/invoices', authMiddleware, async (req, res) => {
+router.get('/invoices', supabaseAuth, async (req, res) => {
   try {
-    const shopId = parseInt(req.query.shopId, 10);
+    const shopId = req.query.shopId;
     if (!shopId) return res.status(400).json({ error: 'shopId required' });
-    await assertShopOwner(shopId, req.user.id);
+    await assertShopOwner(shopId, req.supabaseUser.id);
 
     const { data, error } = await supabase
       .from('subscription_invoices')

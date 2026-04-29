@@ -4,7 +4,7 @@
 -- 1. Active subscription per shop (one row per shop, upserted).
 CREATE TABLE IF NOT EXISTS shop_subscriptions (
   id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  shop_id               integer NOT NULL UNIQUE,
+  shop_id               text NOT NULL UNIQUE,
   plan_code             text    NOT NULL DEFAULT 'free',   -- free | growth | scale
   status                text    NOT NULL DEFAULT 'active', -- active | past_due | cancelled
   billing_period        text    NOT NULL DEFAULT 'monthly',-- monthly | annual
@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS shop_subscriptions (
 
 -- 2. Monthly order counter per shop (calendar month).
 CREATE TABLE IF NOT EXISTS shop_order_counts (
-  shop_id      integer NOT NULL,
+  shop_id      text NOT NULL,
   period_start date    NOT NULL,  -- always first of month, e.g. 2025-04-01
   order_count  integer NOT NULL DEFAULT 0,
   PRIMARY KEY (shop_id, period_start)
@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS shop_order_counts (
 -- 3. Billing invoices (subscription fees + overage charges).
 CREATE TABLE IF NOT EXISTS subscription_invoices (
   id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  shop_id              integer NOT NULL,
+  shop_id              text NOT NULL,
   type                 text    NOT NULL,           -- subscription | overage
   amount               integer NOT NULL,           -- UAH (integer kopecks ×100 handled in code)
   status               text    NOT NULL DEFAULT 'pending', -- pending | paid | failed | void
@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS subscription_invoices (
 );
 
 -- 4. RPC for atomic order count increment (avoids race conditions).
-CREATE OR REPLACE FUNCTION increment_order_count(p_shop_id integer, p_period_start date)
+CREATE OR REPLACE FUNCTION increment_order_count(p_shop_id text, p_period_start date)
 RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
   INSERT INTO shop_order_counts (shop_id, period_start, order_count)
@@ -60,7 +60,7 @@ $$;
 -- 5. Audit log for debugging billing events.
 CREATE TABLE IF NOT EXISTS subscription_events (
   id         bigserial PRIMARY KEY,
-  shop_id    integer   NOT NULL,
+  shop_id    text      NOT NULL,
   event      text      NOT NULL,
   data       jsonb     NOT NULL DEFAULT '{}',
   created_at timestamptz NOT NULL DEFAULT now()
