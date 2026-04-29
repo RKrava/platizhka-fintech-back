@@ -162,10 +162,24 @@ const provider = {
     if (!rawBody) throw new Error('Webhook verification requires raw body');
 
     const pem = await getPubkey(credentials.token);
-    const verifier = crypto.createVerify('SHA256');
-    verifier.update(typeof rawBody === 'string' ? rawBody : Buffer.from(rawBody));
-    verifier.end();
-    const ok = verifier.verify(pem, Buffer.from(sigB64, 'base64'));
+    const data = typeof rawBody === 'string' ? Buffer.from(rawBody, 'utf8') : Buffer.from(rawBody);
+    const sig = Buffer.from(sigB64, 'base64');
+
+    // Normalise the key through createPublicKey so OpenSSL 3.x (Node 18+) can
+    // handle EC keys regardless of whether they use named-curve or explicit params.
+    let keyObj;
+    try {
+      keyObj = crypto.createPublicKey(pem);
+    } catch (e) {
+      throw new Error(`Failed to parse Monobank public key: ${e.message}`);
+    }
+
+    let ok = false;
+    try {
+      ok = crypto.verify('SHA256', data, keyObj, sig);
+    } catch (e) {
+      throw new Error(`Signature verification failed: ${e.message}`);
+    }
     if (!ok) throw new Error('Monobank webhook signature is invalid');
     return true;
   },
