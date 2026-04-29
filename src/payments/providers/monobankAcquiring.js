@@ -31,21 +31,74 @@ const BASE_URL = 'https://api.monobank.ua';
 const PUBLIC_SANDBOX_TOKEN = 'uev-3VIVqzTiwhMI3BIMhlOicdKZqheSxingzQhd4V_Q';
 
 /* ─── Pubkey cache (in-process, per token) ─── */
-const pubkeyCache = new Map(); // token -> { pem, fetchedAt }
+const pubkeyCache = new Map(); // token -> { keyObj, fetchedAt }
+
+/**
+ * Normalise whatever Monobank returns into a crypto.KeyObject that OpenSSL 3.x
+ * (Node 18+) can use:
+ *
+ * - Strip any EC PARAMETERS block (explicit params → rejected by OpenSSL 3.x).
+ * - If the header is "BEGIN EC PUBLIC KEY" (SEC1), convert to SPKI by wrapping
+ *   the raw EC point with the P-256 algorithm identifier prefix.
+ * - If it looks like raw base64 (no PEM headers at all), wrap it as SPKI.
+ */
+function buildKeyObject(raw) {
+  if (!raw || typeof raw !== 'string') throw new Error('Invalid key value from Monobank');
+
+  // Normalise line endings.
+  let pem = raw.replace(/\r\n/g, '\n').trim();
+
+  // Strip standalone EC PARAMETERS block (explicit params).
+  pem = pem.replace(/-----BEGIN EC PARAMETERS-----[\s\S]*?-----END EC PARAMETERS-----\n?/g, '').trim();
+
+  // If there are no PEM headers at all → treat as raw base64 SPKI.
+  if (!pem.includes('-----BEGIN')) {
+    const b64 = pem.replace(/\s/g, '');
+    const lines = (b64.match(/.{1,64}/g) || []).join('\n');
+    pem = `-----BEGIN PUBLIC KEY-----\n${lines}\n-----END PUBLIC KEY-----`;
+  }
+
+  // If it's a SEC1 EC PUBLIC KEY (not SPKI), convert to SPKI manually.
+  // The SPKI prefix for P-256 (secp256r1) in DER is a fixed 27-byte header:
+  //   SEQUENCE { SEQUENCE { OID ecPublicKey, OID prime256v1 }, BIT STRING }
+  if (pem.includes('BEGIN EC PUBLIC KEY')) {
+    const b64 = pem
+      .replace(/-----BEGIN EC PUBLIC KEY-----/, '')
+      .replace(/-----END EC PUBLIC KEY-----/, '')
+      .replace(/\s/g, '');
+    const ecPoint = Buffer.from(b64, 'base64'); // 04 || x || y (65 bytes for P-256)
+    // SPKI DER for P-256:
+    const p256Prefix = Buffer.from(
+      '3059301306072a8648ce3d020106082a8648ce3d030107034200',
+      'hex',
+    );
+    const spkiDer = Buffer.concat([p256Prefix, ecPoint]);
+    const spkiB64 = spkiDer.toString('base64').match(/.{1,64}/g).join('\n');
+    pem = `-----BEGIN PUBLIC KEY-----\n${spkiB64}\n-----END PUBLIC KEY-----`;
+  }
+
+  try {
+    return crypto.createPublicKey({ key: pem, format: 'pem' });
+  } catch (e) {
+    console.error('[mono/pubkey] Failed to parse key. Header line:', pem.split('\n')[0]);
+    throw new Error(`Cannot parse Monobank public key: ${e.message}`);
+  }
+}
 
 async function getPubkey(token) {
   const cached = pubkeyCache.get(token);
   // Refresh every 24h — Monobank rotates rarely.
   if (cached && Date.now() - cached.fetchedAt < 24 * 60 * 60 * 1000) {
-    return cached.pem;
+    return cached.keyObj;
   }
   const r = await axios.get(`${BASE_URL}/api/merchant/pubkey`, {
     headers: { 'X-Token': token },
   });
-  const pem = r.data?.key;
-  if (!pem) throw new Error('Monobank pubkey response missing `key`');
-  pubkeyCache.set(token, { pem, fetchedAt: Date.now() });
-  return pem;
+  const raw = r.data?.key;
+  if (!raw) throw new Error('Monobank pubkey response missing `key`');
+  const keyObj = buildKeyObject(raw);
+  pubkeyCache.set(token, { keyObj, fetchedAt: Date.now() });
+  return keyObj;
 }
 
 /* ─── Provider ─── */
@@ -161,24 +214,21 @@ const provider = {
     if (!sigB64) throw new Error('Missing X-Sign header');
     if (!rawBody) throw new Error('Webhook verification requires raw body');
 
-    const pem = await getPubkey(credentials.token);
+    const keyObj = await getPubkey(credentials.token);
     const data = typeof rawBody === 'string' ? Buffer.from(rawBody, 'utf8') : Buffer.from(rawBody);
     const sig = Buffer.from(sigB64, 'base64');
 
-    // Normalise the key through createPublicKey so OpenSSL 3.x (Node 18+) can
-    // handle EC keys regardless of whether they use named-curve or explicit params.
-    let keyObj;
-    try {
-      keyObj = crypto.createPublicKey(pem);
-    } catch (e) {
-      throw new Error(`Failed to parse Monobank public key: ${e.message}`);
-    }
-
+    // Try DER-encoded signature first (standard ECDSA), then IEEE P1363 (r||s)
+    // as a fallback — Monobank has used both in different environments.
     let ok = false;
     try {
       ok = crypto.verify('SHA256', data, keyObj, sig);
-    } catch (e) {
-      throw new Error(`Signature verification failed: ${e.message}`);
+    } catch {
+      try {
+        ok = crypto.verify('SHA256', data, { key: keyObj, dsaEncoding: 'ieee-p1363' }, sig);
+      } catch (e) {
+        throw new Error(`Signature verification failed: ${e.message}`);
+      }
     }
     if (!ok) throw new Error('Monobank webhook signature is invalid');
     return true;
