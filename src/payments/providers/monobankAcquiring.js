@@ -33,56 +33,55 @@ const PUBLIC_SANDBOX_TOKEN = 'uev-3VIVqzTiwhMI3BIMhlOicdKZqheSxingzQhd4V_Q';
 /* ─── Pubkey cache (in-process, per token) ─── */
 const pubkeyCache = new Map(); // token -> { keyObj, fetchedAt }
 
+// Fixed SPKI prefix for P-256 (secp256r1): wraps a raw 65-byte uncompressed
+// EC point (04 || x || y) into a SubjectPublicKeyInfo DER structure.
+const P256_SPKI_PREFIX = Buffer.from(
+  '3059301306072a8648ce3d020106082a8648ce3d030107034200',
+  'hex',
+);
+
 /**
- * Normalise whatever Monobank returns into a crypto.KeyObject that OpenSSL 3.x
- * (Node 18+) can use:
+ * Normalise whatever Monobank returns into a crypto.KeyObject.
  *
- * - Strip any EC PARAMETERS block (explicit params → rejected by OpenSSL 3.x).
- * - If the header is "BEGIN EC PUBLIC KEY" (SEC1), convert to SPKI by wrapping
- *   the raw EC point with the P-256 algorithm identifier prefix.
- * - If it looks like raw base64 (no PEM headers at all), wrap it as SPKI.
+ * Monobank's /api/merchant/pubkey `key` field can arrive in several shapes:
+ *   1. SPKI PEM ("BEGIN PUBLIC KEY") with valid DER   → parse directly
+ *   2. SPKI PEM with content that is actually a raw EC point (wrong tag error)
+ *   3. SEC1 PEM ("BEGIN EC PUBLIC KEY"), with or without EC PARAMETERS block
+ *   4. Raw base64 of an uncompressed EC point (04 || x || y, 65 bytes)
+ *
+ * We detect the actual byte content and construct a KeyObject accordingly.
  */
 function buildKeyObject(raw) {
   if (!raw || typeof raw !== 'string') throw new Error('Invalid key value from Monobank');
 
-  // Normalise line endings.
-  let pem = raw.replace(/\r\n/g, '\n').trim();
+  // Strip PEM headers and all whitespace to get the raw base64 payload.
+  const b64 = raw
+    .replace(/-----[^-]+-----/g, '')
+    .replace(/\s/g, '');
 
-  // Strip standalone EC PARAMETERS block (explicit params).
-  pem = pem.replace(/-----BEGIN EC PARAMETERS-----[\s\S]*?-----END EC PARAMETERS-----\n?/g, '').trim();
+  const der = Buffer.from(b64, 'base64');
 
-  // If there are no PEM headers at all → treat as raw base64 SPKI.
-  if (!pem.includes('-----BEGIN')) {
-    const b64 = pem.replace(/\s/g, '');
-    const lines = (b64.match(/.{1,64}/g) || []).join('\n');
-    pem = `-----BEGIN PUBLIC KEY-----\n${lines}\n-----END PUBLIC KEY-----`;
+  console.log(`[mono/pubkey] key bytes: length=${der.length} first=0x${der[0]?.toString(16)}`);
+
+  // Case A: uncompressed EC point (04 || x32 || y32 = 65 bytes)
+  //         → wrap in P-256 SPKI DER
+  if (der[0] === 0x04) {
+    const spki = Buffer.concat([P256_SPKI_PREFIX, der]);
+    return crypto.createPublicKey({ key: spki, format: 'der', type: 'spki' });
   }
 
-  // If it's a SEC1 EC PUBLIC KEY (not SPKI), convert to SPKI manually.
-  // The SPKI prefix for P-256 (secp256r1) in DER is a fixed 27-byte header:
-  //   SEQUENCE { SEQUENCE { OID ecPublicKey, OID prime256v1 }, BIT STRING }
-  if (pem.includes('BEGIN EC PUBLIC KEY')) {
-    const b64 = pem
-      .replace(/-----BEGIN EC PUBLIC KEY-----/, '')
-      .replace(/-----END EC PUBLIC KEY-----/, '')
-      .replace(/\s/g, '');
-    const ecPoint = Buffer.from(b64, 'base64'); // 04 || x || y (65 bytes for P-256)
-    // SPKI DER for P-256:
-    const p256Prefix = Buffer.from(
-      '3059301306072a8648ce3d020106082a8648ce3d030107034200',
-      'hex',
-    );
-    const spkiDer = Buffer.concat([p256Prefix, ecPoint]);
-    const spkiB64 = spkiDer.toString('base64').match(/.{1,64}/g).join('\n');
-    pem = `-----BEGIN PUBLIC KEY-----\n${spkiB64}\n-----END PUBLIC KEY-----`;
+  // Case B: DER SEQUENCE (0x30) → try as SPKI DER directly, bypass PEM parsing
+  if (der[0] === 0x30) {
+    try {
+      return crypto.createPublicKey({ key: der, format: 'der', type: 'spki' });
+    } catch (e) {
+      throw new Error(`Cannot parse Monobank SPKI DER: ${e.message}`);
+    }
   }
 
-  try {
-    return crypto.createPublicKey({ key: pem, format: 'pem' });
-  } catch (e) {
-    console.error('[mono/pubkey] Failed to parse key. Header line:', pem.split('\n')[0]);
-    throw new Error(`Cannot parse Monobank public key: ${e.message}`);
-  }
+  throw new Error(
+    `Unrecognised Monobank public key format (length=${der.length}, first byte=0x${der[0]?.toString(16)})`,
+  );
 }
 
 async function getPubkey(token) {
