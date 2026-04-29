@@ -43,44 +43,57 @@ const P256_SPKI_PREFIX = Buffer.from(
 /**
  * Normalise whatever Monobank returns into a crypto.KeyObject.
  *
- * Monobank's /api/merchant/pubkey `key` field can arrive in several shapes:
- *   1. SPKI PEM ("BEGIN PUBLIC KEY") with valid DER   → parse directly
- *   2. SPKI PEM with content that is actually a raw EC point (wrong tag error)
- *   3. SEC1 PEM ("BEGIN EC PUBLIC KEY"), with or without EC PARAMETERS block
- *   4. Raw base64 of an uncompressed EC point (04 || x || y, 65 bytes)
- *
- * We detect the actual byte content and construct a KeyObject accordingly.
+ * Tries several strategies in order so we handle all real-world formats:
+ *   1. Pass `raw` directly to createPublicKey — works when it's valid SPKI PEM.
+ *   2. Strip PEM armor and decode base64 to DER, then try as SPKI DER.
+ *   3. If decoded bytes start with 0x04 (uncompressed EC point) → wrap in P-256 SPKI.
  */
 function buildKeyObject(raw) {
   if (!raw || typeof raw !== 'string') throw new Error('Invalid key value from Monobank');
 
-  // Strip PEM headers and all whitespace to get the raw base64 payload.
-  const b64 = raw
-    .replace(/-----[^-]+-----/g, '')
-    .replace(/\s/g, '');
+  // Normalise line-endings and trim BOM / trailing whitespace.
+  const normalized = raw.replace(/\r\n/g, '\n').replace(/^﻿/, '').trim();
 
-  const der = Buffer.from(b64, 'base64');
+  console.log(`[mono/pubkey] raw key preview: ${JSON.stringify(normalized.slice(0, 80))}`);
 
-  console.log(`[mono/pubkey] key bytes: length=${der.length} first=0x${der[0]?.toString(16)}`);
-
-  // Case A: uncompressed EC point (04 || x32 || y32 = 65 bytes)
-  //         → wrap in P-256 SPKI DER
-  if (der[0] === 0x04) {
-    const spki = Buffer.concat([P256_SPKI_PREFIX, der]);
-    return crypto.createPublicKey({ key: spki, format: 'der', type: 'spki' });
+  // Strategy 1: let Node.js parse it directly (handles valid SPKI / SEC1 PEM).
+  try {
+    return crypto.createPublicKey(normalized);
+  } catch (e1) {
+    console.log(`[mono/pubkey] direct parse failed: ${e1.message}`);
   }
 
-  // Case B: DER SEQUENCE (0x30) → try as SPKI DER directly, bypass PEM parsing
+  // Strategy 2: strip PEM armor lines, decode the inner base64 to DER.
+  const b64 = normalized
+    .split('\n')
+    .filter(line => !line.startsWith('-----'))
+    .join('');
+  const der = Buffer.from(b64, 'base64');
+
+  console.log(`[mono/pubkey] decoded DER: length=${der.length} first=0x${der[0]?.toString(16)}`);
+
+  // Strategy 3: raw uncompressed EC point (starts with 0x04) → wrap in P-256 SPKI.
+  if (der[0] === 0x04) {
+    const spki = Buffer.concat([P256_SPKI_PREFIX, der]);
+    try {
+      return crypto.createPublicKey({ key: spki, format: 'der', type: 'spki' });
+    } catch (e) {
+      throw new Error(`Cannot wrap EC point in SPKI: ${e.message}`);
+    }
+  }
+
+  // Strategy 4: already a DER SEQUENCE → try directly as SPKI.
   if (der[0] === 0x30) {
     try {
       return crypto.createPublicKey({ key: der, format: 'der', type: 'spki' });
     } catch (e) {
-      throw new Error(`Cannot parse Monobank SPKI DER: ${e.message}`);
+      throw new Error(`Cannot parse Monobank DER as SPKI: ${e.message}`);
     }
   }
 
   throw new Error(
-    `Unrecognised Monobank public key format (length=${der.length}, first byte=0x${der[0]?.toString(16)})`,
+    `Unrecognised Monobank public key (decoded length=${der.length}, first=0x${der[0]?.toString(16)}). ` +
+    `Raw preview: ${JSON.stringify(normalized.slice(0, 120))}`,
   );
 }
 
