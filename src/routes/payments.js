@@ -11,6 +11,7 @@ const express = require('express');
 const supabase = require('../config/supabase');
 const { getProvider } = require('../payments/registry');
 const PaymentInvoice = require('../models/PaymentInvoice');
+const { checkLimit, incrementCount } = require('../billing/orderCounting');
 
 const router = express.Router();
 
@@ -108,6 +109,12 @@ router.post(
             .update({ status: orderStatus })
             .eq('id', invoice.order_id);
         }
+        // Increment monthly order counter on successful payment.
+        if (event.status === 'success' && !invoice.is_test) {
+          await incrementCount(invoice.shop_id).catch((e) =>
+            console.warn('[payments/webhook] incrementCount failed:', e.message),
+          );
+        }
       }
 
       return res.status(200).json({ ok: true });
@@ -178,6 +185,20 @@ router.post('/invoices', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
+    // Check billing limit (skip for test checkouts).
+    if (!isTestCheckout) {
+      const billing = await checkLimit(shopId);
+      if (billing.blocked) {
+        return res.status(402).json({
+          error: 'checkout_disabled',
+          reason: 'limit_exceeded',
+          count: billing.count,
+          limit: billing.limit,
+          planCode: billing.planCode,
+        });
+      }
+    }
+
     const isCOD = providerCode === 'cash_on_delivery';
     const provider = isCOD ? null : getProvider(providerCode);
 
@@ -235,6 +256,11 @@ router.post('/invoices', async (req, res) => {
 
     // Cash on delivery short-circuit.
     if (isCOD) {
+      if (!isTest) {
+        await incrementCount(shopId).catch((e) =>
+          console.warn('[payments/invoices] COD incrementCount failed:', e.message),
+        );
+      }
       return res.json({
         orderId,
         invoiceId: null,

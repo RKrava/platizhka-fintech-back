@@ -18,6 +18,7 @@ const promoCodeRoutes = require("./src/routes/promoCodes");
 const abandonedRoutes = require("./src/routes/abandoned");
 const abandonedTrackRoutes = require("./src/routes/abandoned-track");
 const reviewRoutes = require("./src/routes/reviews");
+const billingRoutes = require("./src/routes/billing");
 // Short link redirects moved to separate service (short-links repo)
 // const redirectRoutes = require("./src/routes/redirect");
 const app = express();
@@ -34,10 +35,9 @@ app.use(cors({
 }));
 app.options('*', cors());
 
-// Payment webhooks need the RAW request body to verify provider signatures
-// (Monobank uses ECDSA over the exact bytes). Mount the raw parser BEFORE
-// express.json() so JSON parsing doesn't strip the original payload.
+// Webhook routes need raw body for ECDSA signature verification.
 app.use('/payments/webhook', express.raw({ type: '*/*' }));
+app.use('/billing/webhook', express.raw({ type: '*/*' }));
 
 app.use(express.json());
 
@@ -56,6 +56,7 @@ app.use('/promo-codes', promoCodeRoutes);
 app.use('/abandoned', abandonedRoutes);
 app.use('/abandoned-track', abandonedTrackRoutes);
 app.use('/reviews', reviewRoutes);
+app.use('/billing', billingRoutes);
 // app.use('/r', redirectRoutes); // moved to short-links service
 
 // Cron moved to separate service: cart-recovery (Railway)
