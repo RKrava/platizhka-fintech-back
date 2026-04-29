@@ -64,7 +64,7 @@ router.post(
         .maybeSingle();
       if (methodErr) throw new Error(methodErr.message);
       const merchantCreds = methodRow?.credentials ?? {};
-      const isTest = !!invoice.is_test;
+      const isTest = !!methodRow?.is_test; // use payment method sandbox flag for signature verification
       const credentials = provider.resolveCredentials(merchantCreds, { isTest });
 
       try {
@@ -305,7 +305,7 @@ router.post('/invoices', async (req, res) => {
       orderRef,
       amount,
       currency,
-      isTest,
+      isTest: !!isTestCheckout,
       redirectUrl: result.redirectUrl,
       payload: { request: { amount, currency, orderRef, items, customer }, response: result.raw },
     });
