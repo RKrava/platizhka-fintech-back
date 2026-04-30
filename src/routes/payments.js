@@ -122,12 +122,12 @@ router.post(
             .maybeSingle();
           const sessionId = orderForSession?.metadata?.sessionId;
           if (sessionId) {
-            await supabase
+            const { error: recoverErr } = await supabase
               .from('abandoned_checkouts')
               .update({ recovered: true })
               .eq('shop_id', invoice.shop_id)
-              .eq('session_id', sessionId)
-              .catch((e) => console.warn('[payments/webhook] abandoned recovery failed:', e.message));
+              .eq('session_id', sessionId);
+            if (recoverErr) console.warn('[payments/webhook] abandoned recovery failed:', recoverErr.message);
           }
         }
       }
@@ -281,12 +281,12 @@ router.post('/invoices', async (req, res) => {
         // Mark abandoned checkout as recovered for COD orders.
         const sessionId = (metadata || {}).sessionId;
         if (sessionId) {
-          await supabase
+          const { error: recoverErr2 } = await supabase
             .from('abandoned_checkouts')
             .update({ recovered: true })
             .eq('shop_id', shopId)
-            .eq('session_id', sessionId)
-            .catch((e) => console.warn('[payments/invoices] COD abandoned recovery failed:', e.message));
+            .eq('session_id', sessionId);
+          if (recoverErr2) console.warn('[payments/invoices] COD abandoned recovery failed:', recoverErr2.message);
         }
       }
       return res.json({
