@@ -185,4 +185,57 @@ function formatDelivery(delivery) {
   return where ? `${name}: ${where}` : name;
 }
 
-module.exports = { createShopifyOrder };
+/**
+ * Clears a Shopify cart via the Storefront API.
+ * cartToken — the plain token from /cart.js (e.g. "abc123…")
+ * shop      — must contain shopify_url and storefront_api_token
+ */
+async function clearShopifyCart(shop, cartToken) {
+  const { shopify_url, storefront_api_token } = shop;
+  if (!shopify_url || !storefront_api_token || !cartToken) return;
+
+  const domain   = shopify_url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+  const endpoint = `https://${domain}/api/2024-10/graphql.json`;
+  const cartId   = `gid://shopify/Cart/${cartToken}`;
+
+  // 1) Fetch current line IDs
+  const queryResp = await fetch(endpoint, {
+    method:  'POST',
+    headers: {
+      'Content-Type':                    'application/json',
+      'X-Shopify-Storefront-Access-Token': storefront_api_token,
+    },
+    body: JSON.stringify({
+      query: `query GetCartLines($cartId: ID!) {
+        cart(id: $cartId) { lines(first: 100) { edges { node { id } } } }
+      }`,
+      variables: { cartId },
+    }),
+  });
+
+  if (!queryResp.ok) return;
+  const queryJson = await queryResp.json();
+  const edges = queryJson?.data?.cart?.lines?.edges ?? [];
+  if (edges.length === 0) return; // already empty
+
+  const lineIds = edges.map((e) => e.node.id);
+
+  // 2) Remove all lines
+  await fetch(endpoint, {
+    method:  'POST',
+    headers: {
+      'Content-Type':                    'application/json',
+      'X-Shopify-Storefront-Access-Token': storefront_api_token,
+    },
+    body: JSON.stringify({
+      query: `mutation CartLinesRemove($cartId: ID!, $lineIds: [ID!]!) {
+        cartLinesRemove(cartId: $cartId, lineIds: $lineIds) {
+          userErrors { field message }
+        }
+      }`,
+      variables: { cartId, lineIds },
+    }),
+  });
+}
+
+module.exports = { createShopifyOrder, clearShopifyCart };

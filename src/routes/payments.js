@@ -12,7 +12,7 @@ const supabase = require('../config/supabase');
 const { getProvider } = require('../payments/registry');
 const PaymentInvoice = require('../models/PaymentInvoice');
 const { checkLimit, incrementCount } = require('../billing/orderCounting');
-const { createShopifyOrder } = require('../shopify/createShopifyOrder');
+const { createShopifyOrder, clearShopifyCart } = require('../shopify/createShopifyOrder');
 
 const router = express.Router();
 
@@ -94,47 +94,9 @@ router.post(
             : null,
       });
 
-      // Update linked order status.
+      // Update order status + run all post-payment side-effects.
       if (invoice.order_id) {
-        const orderStatus =
-          event.status === 'success'
-            ? 'paid'
-            : event.status === 'failed'
-            ? 'failed'
-            : event.status === 'refunded'
-            ? 'refunded'
-            : null;
-        if (orderStatus) {
-          await supabase
-            .from('orders')
-            .update({ status: orderStatus })
-            .eq('id', invoice.order_id);
-        }
-        // Increment monthly order counter on successful payment.
-        if (event.status === 'success' && !invoice.is_test) {
-          await incrementCount(invoice.shop_id).catch((e) =>
-            console.warn('[payments/webhook] incrementCount failed:', e.message),
-          );
-          // Mark abandoned checkout as recovered.
-          const { data: orderForSession } = await supabase
-            .from('orders')
-            .select('metadata')
-            .eq('id', invoice.order_id)
-            .maybeSingle();
-          const sessionId = orderForSession?.metadata?.sessionId;
-          if (sessionId) {
-            const { error: recoverErr } = await supabase
-              .from('abandoned_checkouts')
-              .update({ recovered: true })
-              .eq('shop_id', invoice.shop_id)
-              .eq('session_id', sessionId);
-            if (recoverErr) console.warn('[payments/webhook] abandoned recovery failed:', recoverErr.message);
-          }
-          // Create order in Shopify (fire-and-forget — don't block webhook response).
-          pushShopifyOrder(invoice.shop_id, invoice.order_id).catch((e) =>
-            console.warn('[payments/webhook] Shopify order push failed:', e.message),
-          );
-        }
+        await handleInvoiceStatusChange(invoice, event.status);
       }
 
       return res.status(200).json({ ok: true });
@@ -378,6 +340,9 @@ router.get('/invoices/:id', async (req, res) => {
           const live = await provider.getInvoice(invoice.external_id, credentials);
           if (live.status && live.status !== 'pending') {
             await invoice.setStatus(live.status, { webhook: live.raw });
+            if (invoice.order_id) {
+              await handleInvoiceStatusChange(invoice, live.status);
+            }
           }
         } catch (e) {
           console.warn(`[payments] poll ${invoice.id} failed: ${e.message}`);
@@ -403,6 +368,49 @@ router.get('/invoices/:id', async (req, res) => {
 });
 
 /**
+ * Run all side-effects after a payment invoice changes status.
+ * Safe to call from both the webhook handler and the polling endpoint.
+ * Idempotency for Shopify order is handled inside pushShopifyOrder.
+ */
+async function handleInvoiceStatusChange(invoice, newStatus) {
+  const orderStatus =
+    newStatus === 'success'  ? 'paid'     :
+    newStatus === 'failed'   ? 'failed'   :
+    newStatus === 'refunded' ? 'refunded' : null;
+
+  if (orderStatus) {
+    await supabase.from('orders').update({ status: orderStatus }).eq('id', invoice.order_id);
+  }
+
+  if (newStatus === 'success' && !invoice.is_test) {
+    await incrementCount(invoice.shop_id).catch((e) =>
+      console.warn('[payments] incrementCount failed:', e.message),
+    );
+
+    // Mark abandoned checkout as recovered.
+    const { data: orderRow } = await supabase
+      .from('orders')
+      .select('metadata')
+      .eq('id', invoice.order_id)
+      .maybeSingle();
+    const sessionId = orderRow?.metadata?.sessionId;
+    if (sessionId) {
+      const { error: recoverErr } = await supabase
+        .from('abandoned_checkouts')
+        .update({ recovered: true })
+        .eq('shop_id', invoice.shop_id)
+        .eq('session_id', sessionId);
+      if (recoverErr) console.warn('[payments] abandoned recovery failed:', recoverErr.message);
+    }
+
+    // Push order to Shopify (fire-and-forget).
+    pushShopifyOrder(invoice.shop_id, invoice.order_id).catch((e) =>
+      console.warn('[payments] Shopify order push failed:', e.message),
+    );
+  }
+}
+
+/**
  * Fetch the order + shop from Supabase and push it to Shopify.
  * Skips silently if the shop has no admin_api_token configured.
  * Idempotency: checks orders.metadata.shopifyOrderId before creating.
@@ -410,7 +418,10 @@ router.get('/invoices/:id', async (req, res) => {
 async function pushShopifyOrder(shopId, orderId) {
   const [{ data: orderRow }, { data: shopRow }] = await Promise.all([
     supabase.from('orders').select('*').eq('id', orderId).maybeSingle(),
-    supabase.from('shops').select('shopify_url, admin_api_token').eq('id', shopId).maybeSingle(),
+    supabase.from('shops')
+      .select('shopify_url, admin_api_token, storefront_api_token')
+      .eq('id', shopId)
+      .maybeSingle(),
   ]);
 
   if (!orderRow || !shopRow) {
@@ -425,6 +436,14 @@ async function pushShopifyOrder(shopId, orderId) {
   if (orderRow.metadata?.shopifyOrderId) return;
 
   const shopifyOrder = await createShopifyOrder(orderRow, shopRow);
+
+  // Clear the Shopify cart so items don't linger after purchase.
+  const cartToken = orderRow.metadata?.cartToken;
+  if (cartToken && shopRow.storefront_api_token) {
+    clearShopifyCart(shopRow, cartToken).catch((e) =>
+      console.warn('[pushShopifyOrder] cart clear failed:', e.message),
+    );
+  }
 
   // Persist the Shopify order ID so we don't double-create on retries.
   await supabase
