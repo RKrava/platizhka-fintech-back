@@ -12,6 +12,7 @@ const supabase = require('../config/supabase');
 const { getProvider } = require('../payments/registry');
 const PaymentInvoice = require('../models/PaymentInvoice');
 const { checkLimit, incrementCount } = require('../billing/orderCounting');
+const { createShopifyOrder } = require('../shopify/createShopifyOrder');
 
 const router = express.Router();
 
@@ -129,6 +130,10 @@ router.post(
               .eq('session_id', sessionId);
             if (recoverErr) console.warn('[payments/webhook] abandoned recovery failed:', recoverErr.message);
           }
+          // Create order in Shopify (fire-and-forget — don't block webhook response).
+          pushShopifyOrder(invoice.shop_id, invoice.order_id).catch((e) =>
+            console.warn('[payments/webhook] Shopify order push failed:', e.message),
+          );
         }
       }
 
@@ -288,6 +293,10 @@ router.post('/invoices', async (req, res) => {
             .eq('session_id', sessionId);
           if (recoverErr2) console.warn('[payments/invoices] COD abandoned recovery failed:', recoverErr2.message);
         }
+        // Create order in Shopify (fire-and-forget).
+        pushShopifyOrder(shopId, orderId).catch((e) =>
+          console.warn('[payments/invoices] COD Shopify order push failed:', e.message),
+        );
       }
       return res.json({
         orderId,
@@ -392,6 +401,39 @@ router.get('/invoices/:id', async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 });
+
+/**
+ * Fetch the order + shop from Supabase and push it to Shopify.
+ * Skips silently if the shop has no admin_api_token configured.
+ * Idempotency: checks orders.metadata.shopifyOrderId before creating.
+ */
+async function pushShopifyOrder(shopId, orderId) {
+  const [{ data: orderRow }, { data: shopRow }] = await Promise.all([
+    supabase.from('orders').select('*').eq('id', orderId).maybeSingle(),
+    supabase.from('shops').select('shopify_url, admin_api_token').eq('id', shopId).maybeSingle(),
+  ]);
+
+  if (!orderRow || !shopRow) {
+    console.warn(`[pushShopifyOrder] order or shop not found (order=${orderId}, shop=${shopId})`);
+    return;
+  }
+  if (!shopRow.admin_api_token || !shopRow.shopify_url) {
+    // Shop not connected to Shopify Admin API — skip silently.
+    return;
+  }
+  // Idempotency: skip if already pushed.
+  if (orderRow.metadata?.shopifyOrderId) return;
+
+  const shopifyOrder = await createShopifyOrder(orderRow, shopRow);
+
+  // Persist the Shopify order ID so we don't double-create on retries.
+  await supabase
+    .from('orders')
+    .update({ metadata: { ...(orderRow.metadata ?? {}), shopifyOrderId: String(shopifyOrder.id) } })
+    .eq('id', orderId);
+
+  console.log(`[pushShopifyOrder] created Shopify order #${shopifyOrder.order_number} for order ${orderId}`);
+}
 
 /** Add or replace query parameters on a URL, preserving existing ones. */
 function appendQuery(url, params) {
