@@ -72,6 +72,10 @@ async function createShopifyOrder(order, shop) {
     });
   }
 
+  // ─── Customer: find existing by phone/email, or create new ──────────────────
+  const domain = shopify_url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+  const customerPayload = await findOrBuildCustomer(domain, admin_api_token, customer);
+
   // ─── Payload ─────────────────────────────────────────────────────────────────
   const payload = {
     order: {
@@ -80,12 +84,7 @@ async function createShopifyOrder(order, shop) {
       send_fulfillment_receipt:    false,
       currency:                   order.currency || 'UAH',
       line_items:                 lineItems,
-      customer: {
-        first_name: customer.firstName || '',
-        last_name:  customer.lastName  || '',
-        ...(customer.email ? { email: customer.email } : {}),
-        ...(customer.phone ? { phone: customer.phone } : {}),
-      },
+      customer:                   customerPayload,
       shipping_address:           shippingAddress,
       ...(noteParts.length  ? { note:           noteParts.join('\n')  } : {}),
       ...(discountCodes.length ? { discount_codes: discountCodes } : {}),
@@ -95,7 +94,6 @@ async function createShopifyOrder(order, shop) {
     },
   };
 
-  const domain = shopify_url.replace(/^https?:\/\//, '').replace(/\/$/, '');
   const url    = `https://${domain}/admin/api/2024-10/orders.json`;
 
   const resp = await fetch(url, {
@@ -117,6 +115,45 @@ async function createShopifyOrder(order, shop) {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Search Shopify for an existing customer by phone then email.
+ * Returns { id } if found (Shopify links the order to them without re-creating),
+ * or a full new-customer object if not found.
+ * This avoids the "phone has already been taken" 422 error.
+ */
+async function findOrBuildCustomer(domain, token, customer) {
+  const headers = { 'X-Shopify-Access-Token': token };
+  const base    = `https://${domain}/admin/api/2024-10/customers/search.json`;
+
+  const trySearch = async (query) => {
+    try {
+      const r = await fetch(`${base}?query=${encodeURIComponent(query)}&limit=1&fields=id`, { headers });
+      if (!r.ok) return null;
+      const json = await r.json();
+      return json.customers?.[0]?.id ?? null;
+    } catch {
+      return null;
+    }
+  };
+
+  // Search by phone first, then email.
+  const phone = customer.phone?.trim();
+  const email = customer.email?.trim();
+
+  let existingId = phone ? await trySearch(`phone:${phone}`) : null;
+  if (!existingId && email) existingId = await trySearch(`email:${email}`);
+
+  if (existingId) return { id: existingId };
+
+  // Brand-new customer.
+  return {
+    first_name: customer.firstName || '',
+    last_name:  customer.lastName  || '',
+    ...(email ? { email } : {}),
+    ...(phone ? { phone } : {}),
+  };
+}
 
 function buildShippingAddress(customer, delivery, recipient) {
   const person    = recipient || customer;
