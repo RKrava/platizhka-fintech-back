@@ -29,6 +29,7 @@ router.post(
       return res.status(404).json({ error: e.message });
     }
 
+    console.warn('[payments/webhook] is here', req.params);
     try {
       const rawBody = req.body; // Buffer
       let body;
