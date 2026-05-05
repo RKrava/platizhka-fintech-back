@@ -168,6 +168,18 @@ router.post('/invoices', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
+    // Check shop status — owner may pause the checkout from admin panel.
+    if (!isTestCheckout) {
+      const { data: shopStatus } = await supabase
+        .from('shops')
+        .select('status')
+        .eq('id', shopId)
+        .maybeSingle();
+      if (shopStatus?.status === 'paused') {
+        return res.status(402).json({ error: 'checkout_disabled', reason: 'shop_paused' });
+      }
+    }
+
     // Check billing limit (skip for test checkouts).
     if (!isTestCheckout) {
       const billing = await checkLimit(shopId);
