@@ -281,6 +281,18 @@ function mapStatus(s) {
   }
 }
 
+/**
+ * Returns the signed ACK body that WayForPay requires in response to every
+ * webhook notification. Without this exact JSON (including the signature),
+ * WayForPay treats the webhook as unacknowledged and keeps retrying.
+ */
+provider.buildWebhookAck = function buildWebhookAck(orderReference, credentials) {
+  const time = Math.floor(Date.now() / 1000);
+  const status = 'accept';
+  const signature = signWebhookAck(credentials.secretKey, orderReference, status, time);
+  return { orderReference, status, time, signature };
+};
+
 provider._test = {
   hmacMd5,
   signCreateInvoice,

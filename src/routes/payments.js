@@ -43,6 +43,7 @@ router.post(
         body.invoiceId ||
         body.order_id ||
         body.orderId ||
+        body.orderReference ||   // WayForPay uses camelCase
         body.order_reference ||
         body.payment_id ||
         body.id;
@@ -98,6 +99,13 @@ router.post(
       // Update order status + run all post-payment side-effects.
       if (invoice.order_id) {
         await handleInvoiceStatusChange(invoice, event.status);
+      }
+
+      // WayForPay (and potentially other providers) require a signed ACK response,
+      // otherwise they keep retrying the webhook indefinitely.
+      if (typeof provider.buildWebhookAck === 'function') {
+        const ack = provider.buildWebhookAck(event.orderRef || event.externalId, credentials);
+        return res.status(200).json(ack);
       }
 
       return res.status(200).json({ ok: true });
