@@ -8,7 +8,9 @@ const provider = freshRequire('../src/payments/providers/fondy');
 
 const REFERENCE_SIGN = (params, secret) => {
   const filtered = Object.fromEntries(
-    Object.entries(params).filter(([k, v]) => k !== 'signature' && v !== '' && v !== null && v !== undefined),
+    Object.entries(params).filter(
+      ([k, v]) => k !== 'signature' && k !== 'response_signature_string' && v !== '' && v !== null && v !== undefined,
+    ),
   );
   const sortedValues = Object.keys(filtered).sort().map((k) => String(filtered[k]));
   return crypto.createHash('sha1').update([String(secret), ...sortedValues].join('|')).digest('hex');
@@ -99,4 +101,17 @@ test('fondy: verifyWebhook + parseWebhook', async () => {
     }),
     /signature mismatch/,
   );
+
+  // Fondy appends response_signature_string in test mode AFTER signing —
+  // verifyWebhook must exclude it when re-computing, otherwise all test-mode
+  // callbacks would fail with "signature mismatch".
+  const bodyWithDebugField = {
+    ...body,
+    response_signature_string: 'test|25000|UAH|approved|f-1|success',
+  };
+  await provider.verifyWebhook({
+    rawBody: JSON.stringify(bodyWithDebugField),
+    headers: {},
+    credentials: creds,
+  });
 });

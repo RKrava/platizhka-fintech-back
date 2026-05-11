@@ -8,7 +8,9 @@ const provider = freshRequire('../src/payments/providers/hutko');
 
 const ALGO = (params, secret) => {
   const filtered = Object.fromEntries(
-    Object.entries(params).filter(([k, v]) => k !== 'signature' && v !== '' && v !== null && v !== undefined),
+    Object.entries(params).filter(
+      ([k, v]) => k !== 'signature' && k !== 'response_signature_string' && v !== '' && v !== null && v !== undefined,
+    ),
   );
   const sortedValues = Object.keys(filtered).sort().map((k) => String(filtered[k]));
   const payload = [String(secret), ...sortedValues].join('|');
@@ -130,6 +132,18 @@ test('hutko: verifyWebhook accepts valid signature, rejects mismatched', async (
     }),
     /signature mismatch/,
   );
+
+  // Hutko appends response_signature_string in test mode AFTER signing —
+  // verifyWebhook must exclude it, otherwise all test-mode callbacks fail.
+  const bodyWithDebugField = {
+    ...validBody,
+    response_signature_string: 'test|9950|UAH|approved|h-1|success',
+  };
+  await provider.verifyWebhook({
+    rawBody: JSON.stringify(bodyWithDebugField),
+    headers: {},
+    credentials: creds,
+  });
 });
 
 test('hutko: parseWebhook normalises status', () => {

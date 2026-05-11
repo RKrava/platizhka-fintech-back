@@ -44,7 +44,8 @@ function publicizeUrl(url) {
 function generateSignature(params, secretKey) {
   const filtered = {};
   for (const [k, v] of Object.entries(params)) {
-    if (k === 'signature') continue;
+    // Docs: exclude both 'signature' and 'response_signature_string' (added by Fondy in test mode).
+    if (k === 'signature' || k === 'response_signature_string') continue;
     if (v === '' || v === null || v === undefined) continue; // keep "0"
     filtered[k] = v;
   }

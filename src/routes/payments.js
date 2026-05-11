@@ -36,7 +36,12 @@ router.post(
       try {
         body = JSON.parse(rawBody.toString('utf8'));
       } catch {
-        body = {};
+        // Some providers (e.g. Hutko/Fondy) may send application/x-www-form-urlencoded.
+        try {
+          body = Object.fromEntries(new URLSearchParams(rawBody.toString('utf8')));
+        } catch {
+          body = {};
+        }
       }
 
       const externalId =
