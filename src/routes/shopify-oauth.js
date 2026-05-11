@@ -468,4 +468,45 @@ router.post('/install', async (req, res) => {
   }
 });
 
+/**
+ * POST /shopify-oauth/update-mode
+ * Updates the checkout mode (data-mode attribute) in the shop's active Shopify theme.
+ * Body: { shopId, mode: 'replace' | 'ukraine_only' }
+ */
+const supabaseAuth = require('../middleware/supabaseAuth');
+const { updateCheckoutMode } = require('../shopify/shopify');
+
+router.post('/update-mode', supabaseAuth, async (req, res) => {
+  try {
+    const { shopId, mode } = req.body;
+    if (!shopId || !['replace', 'ukraine_only'].includes(mode)) {
+      return res.status(400).json({ error: 'Invalid shopId or mode' });
+    }
+
+    // Fetch shop, verify ownership
+    const { data: shop, error: shopErr } = await supabaseAdmin
+      .from('shops')
+      .select('id, shopify_url, admin_api_token, settings')
+      .eq('id', shopId)
+      .eq('user_id', req.supabaseUser.id)
+      .maybeSingle();
+
+    if (shopErr || !shop) {
+      return res.status(404).json({ error: 'Shop not found or access denied' });
+    }
+    if (!shop.admin_api_token || !shop.shopify_url) {
+      return res.status(400).json({ error: 'Shop not connected to Shopify' });
+    }
+
+    const hostName = shop.shopify_url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    await updateCheckoutMode({ hostName, adminApiAccessToken: shop.admin_api_token }, mode);
+
+    res.json({ ok: true });
+  } catch (error) {
+    const summary = error?.response?.data ?? error.message;
+    console.error('[update-mode]', summary);
+    res.status(500).json({ error: 'Failed to update checkout mode', details: String(summary).slice(0, 500) });
+  }
+});
+
 module.exports = router;

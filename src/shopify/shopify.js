@@ -504,9 +504,9 @@ const initialConfig = async (shopData) => {
         "ctions.processCheckout()})),t.helpers.addWrapperListener(e,\"click\",(()=>{t.functions.processCheckout()})),e.setAttribute(t.cfg.dataAttrCheckout,\"true\"))})),[...n].forEach((e=>{\"true\"!==e.getAttribute(t.cfg.dataAttrCheckout)&&(t.helpers.add" +
         "WrapperListener(e,\"submit\",(()=>{t.functions.submitBuyNowForm(e)})),e.setAttribute(t.cfg.dataAttrCheckout,\"true\"))})),[...c].forEach((e=>{\"true\"!==e.getAttribute(t.cfg.dataAttrCheckout)&&(t.helpers.addWrapperListener(e,\"click\",(()=>{e.c" +
         "losest(\"form\").submit()})),e.setAttribute(t.cfg.dataAttrCheckout,\"true\"))}))},addDynamicButtonHandlers:()=>{[...t.dom.getDynamicPaymentButtons()].forEach((e=>{t.helpers.addWrapperListener(e,\"click\",(()=>{t.functions.submitBuyNowFor" +
-        "m(e)}))}))},init:()=>{\"UA\"===t.functions.getStoreCountry()&&(t.functions.addDynamicButtonHandlers(),t.functions.addHandlers(),document.addEventListener(\"DOMContentLoaded\",(()=>{t.functions.addDynamicButtonHandlers(),t.functions.addHand" +
+        "m(e)}))}))},init:()=>{const s=document.querySelector(\"[\"+t.cfg.dataAttrAppUrl+\"]\"),m=s&&s.getAttribute(\"data-mode\")||\"ukraine_only\";if(\"replace\"===m||\"UA\"===t.functions.getStoreCountry()){t.functions.addDynamicButtonHandlers(),t.functions.addHandlers(),document.addEventListener(\"DOMContentLoaded\",(()=>{t.functions.addDynamicButtonHandlers(),t.functions.addHand" +
         "lers()})),window.addEventListener(\"load\",(()=>{t.functions.addDynamicButtonHandlers(),t.functions.addHandlers();const e=t.helpers.debounce((()=>{t.functions.addHandlers(),t.functions.addDynamicButtonHandlers()}),100);new MutationObserve" +
-        "r((()=>{e()})).observe(window.document,{attributes:!0,childList:!0,subtree:!0})})))}}};t.functions.init()}();"
+        "r((()=>{e()})).observe(window.document,{attributes:!0,childList:!0,subtree:!0})}))}}};t.functions.init()}();"
 
     const themeId = activeTheme.node.id;
     await client.query({
@@ -552,7 +552,8 @@ const initialConfig = async (shopData) => {
 
     const themeLiquidContent = assetResponse.data.asset.value; // Отримуємо вміст файлу
 
-    const updatedThemeLiquidContent = `<script data-url="https://platizhka.vercel.app" src="{{ 'platizhka.js' | asset_url }}" async></script>\n${themeLiquidContent}`;
+    const checkoutMode = shopData.checkoutMode || 'ukraine_only';
+    const updatedThemeLiquidContent = `<script data-url="https://platizhka.vercel.app" data-mode="${checkoutMode}" src="{{ 'platizhka.js' | asset_url }}" async></script>\n${themeLiquidContent}`;
 
     await client.query({
         data: {
@@ -765,4 +766,44 @@ const applyDiscountCode = async (cartId, discountCodes, storeId, shopData) => {
     });
 };
 
-module.exports = { getCartShopify, createOrder, initialConfig, sendTelegramMessage, getOrderNumber, applyDiscountCode };
+/**
+ * Updates the data-mode attribute on the Platizhka script tag in the active theme.liquid.
+ * Uses the REST Admin API (no apiSecretKey required — only adminApiAccessToken).
+ * mode: 'replace' (all countries) | 'ukraine_only' (UA only)
+ */
+const updateCheckoutMode = async ({ hostName, adminApiAccessToken }, mode) => {
+    const headers = { 'X-Shopify-Access-Token': adminApiAccessToken, 'Content-Type': 'application/json' };
+    const apiBase = `https://${hostName}/admin/api/2024-10`;
+
+    // 1. Find the active theme ID
+    const themesRes = await axios.get(`${apiBase}/themes.json`, { headers });
+    const mainTheme = themesRes.data.themes.find((t) => t.role === 'main');
+    if (!mainTheme) throw new Error('No main theme found');
+
+    // 2. Fetch current theme.liquid
+    const assetRes = await axios.get(`${apiBase}/themes/${mainTheme.id}/assets.json`, {
+        headers,
+        params: { 'asset[key]': 'layout/theme.liquid' },
+    });
+    let content = assetRes.data.asset.value;
+
+    // 3. Update or insert the data-mode attribute on the Platizhka script tag
+    const platizhkaTagRe = /(<script\b[^>]*\bdata-url="https:\/\/platizhka\.vercel\.app"[^>]*)>/;
+    if (platizhkaTagRe.test(content)) {
+        content = content.replace(platizhkaTagRe, (_, before) => {
+            const cleaned = before.replace(/\s+data-mode="[^"]*"/, '');
+            return `${cleaned} data-mode="${mode}">`;
+        });
+    } else {
+        content = `<script data-url="https://platizhka.vercel.app" data-mode="${mode}" src="{{ 'platizhka.js' | asset_url }}" async></script>\n${content}`;
+    }
+
+    // 4. Save the updated theme.liquid
+    await axios.put(
+        `${apiBase}/themes/${mainTheme.id}/assets.json`,
+        { asset: { key: 'layout/theme.liquid', value: content } },
+        { headers },
+    );
+};
+
+module.exports = { getCartShopify, createOrder, initialConfig, updateCheckoutMode, sendTelegramMessage, getOrderNumber, applyDiscountCode };
