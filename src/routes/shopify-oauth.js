@@ -193,9 +193,10 @@ router.get('/authorize', async (req, res) => {
     } = await getShopCredentials(shop);
 
     if (!existingShop) {
-      return res.status(400).json({
-        error: `Shop not found: no Platizhka account is linked to domain "${shop}". Check that the Shopify URL was saved correctly in the dashboard.`,
-      });
+      // Redirect to the frontend linking page so the merchant can pick/correct their shop.
+      const continueUrl = `${getPublicBaseUrl(req)}/shopify-oauth/authorize?shop=${encodeURIComponent(shop)}&host=${encodeURIComponent(host || '')}`;
+      const linkPage = `${getFrontendBaseUrl()}/shopify-connect?shop=${encodeURIComponent(shop)}&continue=${encodeURIComponent(continueUrl)}`;
+      return res.redirect(linkPage);
     }
     if (!clientId || !clientSecret) {
       return res.status(400).json({
@@ -255,9 +256,10 @@ router.get('/callback-handler', async (req, res) => {
     } = await getShopCredentials(shop);
 
     if (!existingShop) {
-      return res.status(400).json({
-        error: `Shop not found: no Platizhka account is linked to domain "${shop}". Check that the Shopify URL was saved correctly in the dashboard.`,
-      });
+      // Shopify already confirmed the install — redirect so merchant can link the correct shop record.
+      const continueUrl = `${getPublicBaseUrl(req)}/shopify-oauth/callback-handler?${new URLSearchParams(req.query).toString()}`;
+      const linkPage = `${getFrontendBaseUrl()}/shopify-connect?shop=${encodeURIComponent(shop)}&continue=${encodeURIComponent(continueUrl)}`;
+      return res.redirect(linkPage);
     }
     if (!clientId || !clientSecret) {
       return res.status(400).json({
