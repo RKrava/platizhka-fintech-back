@@ -121,10 +121,16 @@ function summarizeAxiosError(error) {
 }
 
 async function getShopCredentials(shopDomain) {
+  // Normalize: strip protocol, trailing slash, lowercase — Shopify passes bare domain.
+  const normalized = String(shopDomain || '')
+    .toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .replace(/\/$/, '');
+
   const { data: shop, error } = await supabaseAdmin
     .from('shops')
     .select('*')
-    .eq('shopify_url', shopDomain)
+    .or(`shopify_url.eq.${normalized},shopify_url.eq.https://${normalized}`)
     .maybeSingle();
 
   if (error) {
@@ -186,9 +192,14 @@ router.get('/authorize', async (req, res) => {
       clientSecret,
     } = await getShopCredentials(shop);
 
-    if (!existingShop || !clientId || !clientSecret) {
+    if (!existingShop) {
       return res.status(400).json({
-        error: 'Shopify app credentials not configured for this shop',
+        error: `Shop not found: no Platizhka account is linked to domain "${shop}". Check that the Shopify URL was saved correctly in the dashboard.`,
+      });
+    }
+    if (!clientId || !clientSecret) {
+      return res.status(400).json({
+        error: 'Shopify app credentials not configured for this shop (client_id or client_secret missing in shop settings)',
       });
     }
 
@@ -243,9 +254,14 @@ router.get('/callback-handler', async (req, res) => {
       clientSecret,
     } = await getShopCredentials(shop);
 
-    if (!existingShop || !clientId || !clientSecret) {
+    if (!existingShop) {
       return res.status(400).json({
-        error: 'Shopify app credentials not configured for this shop',
+        error: `Shop not found: no Platizhka account is linked to domain "${shop}". Check that the Shopify URL was saved correctly in the dashboard.`,
+      });
+    }
+    if (!clientId || !clientSecret) {
+      return res.status(400).json({
+        error: 'Shopify app credentials not configured for this shop (client_id or client_secret missing in shop settings)',
       });
     }
 
@@ -445,10 +461,15 @@ router.post('/install', async (req, res) => {
       return res.status(400).json({ error: 'Missing shop or host parameter' });
     }
 
-    const { clientId } = await getShopCredentials(shop);
+    const { shop: existingShop, clientId } = await getShopCredentials(shop);
+    if (!existingShop) {
+      return res.status(400).json({
+        error: `Shop not found: domain "${shop}" is not linked to any Platizhka account.`,
+      });
+    }
     if (!clientId) {
       return res.status(400).json({
-        error: 'Shopify app credentials not configured for this shop',
+        error: 'Shopify app credentials not configured for this shop (client_id missing)',
       });
     }
 
