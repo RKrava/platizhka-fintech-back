@@ -20,6 +20,7 @@ const abandonedTrackRoutes = require("./src/routes/abandoned-track");
 const reviewRoutes = require("./src/routes/reviews");
 const billingRoutes = require("./src/routes/billing");
 const upsellRoutes = require("./src/routes/upsell");
+const authEventsRoutes = require("./src/routes/auth-events");
 // Short link redirects moved to separate service (short-links repo)
 // const redirectRoutes = require("./src/routes/redirect");
 const app = express();
@@ -59,6 +60,7 @@ app.use('/abandoned-track', abandonedTrackRoutes);
 app.use('/reviews', reviewRoutes);
 app.use('/billing', billingRoutes);
 app.use('/upsell', upsellRoutes);
+app.use('/auth-events', authEventsRoutes);
 // app.use('/r', redirectRoutes); // moved to short-links service
 
 // Cron moved to separate service: cart-recovery (Railway)
